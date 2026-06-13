@@ -1,7 +1,16 @@
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { AlertOctagon } from "lucide-react";
+import { AlertOctagon, VolumeX } from "lucide-react";
 import type { Task } from "@/lib/tasks";
+import { DeliveryTracker } from "./DeliveryTracker";
+import { taskStage } from "@/lib/tasks";
+import {
+  loadSettings,
+  startAlarm,
+  stopAlarm,
+  startVibration,
+  stopVibration,
+} from "@/lib/alarm";
 
 const NOTIFY_KEY = "trackit.lastNotify";
 
@@ -63,7 +72,38 @@ export function UrgentOverlay({
     return () => clearInterval(i);
   }, [tasks]);
 
+  // Start alarm + vibration when overlay activates; stop on dismiss/complete
+  const alarmActiveRef = useRef(false);
+  const mutedRef = useRef(false);
+  useEffect(() => {
+    if (!current) {
+      if (alarmActiveRef.current) {
+        stopAlarm();
+        stopVibration();
+        alarmActiveRef.current = false;
+        mutedRef.current = false;
+      }
+      return;
+    }
+    if (alarmActiveRef.current) return;
+    const s = loadSettings();
+    if (s.alarmEnabled && !mutedRef.current) startAlarm(s.alarmTone);
+    if (s.vibrateEnabled) startVibration();
+    alarmActiveRef.current = true;
+    return () => {
+      stopAlarm();
+      stopVibration();
+      alarmActiveRef.current = false;
+    };
+  }, [current?.id]);
+
   if (!current) return null;
+
+  const handleMute = () => {
+    mutedRef.current = true;
+    stopAlarm();
+    stopVibration();
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-red-600 text-white flex flex-col items-center justify-center px-6 animate-fade-in">
@@ -71,9 +111,12 @@ export function UrgentOverlay({
       <p className="text-sm uppercase tracking-widest font-semibold opacity-90">
         Do this now
       </p>
-      <h1 className="text-4xl font-bold text-center mt-3 mb-10 leading-tight">
+      <h1 className="text-4xl font-bold text-center mt-3 mb-6 leading-tight">
         {current.name}
       </h1>
+      <div className="w-full max-w-sm bg-white/10 rounded-xl p-3 mb-8 backdrop-blur">
+        <DeliveryTracker stage={taskStage(current)} overdue />
+      </div>
       <Button
         size="lg"
         onClick={() => onComplete(current.id)}
@@ -81,6 +124,13 @@ export function UrgentOverlay({
       >
         Mark done
       </Button>
+      <button
+        type="button"
+        onClick={handleMute}
+        className="mt-6 flex items-center gap-1.5 text-sm text-white/80 hover:text-white underline-offset-2 hover:underline"
+      >
+        <VolumeX className="h-4 w-4" /> Mute alarm
+      </button>
     </div>
   );
 }
