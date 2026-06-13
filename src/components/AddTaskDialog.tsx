@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Info } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Info, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { Recurrence } from "@/lib/tasks";
+import { parseTaskInput, describeParsed } from "@/lib/nlp";
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -49,6 +50,25 @@ export function AddTaskDialog({
   const [recurrence, setRecurrence] = useState<Recurrence>("none");
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [urgent, setUrgent] = useState(false);
+  const [autoApplied, setAutoApplied] = useState(false);
+  const [dismissedDetection, setDismissedDetection] = useState(false);
+
+  const parsed = useMemo(() => parseTaskInput(name), [name]);
+  const hasDetection =
+    !!parsed.time || !!parsed.date || !!parsed.recurrence || !!parsed.urgent;
+
+  // Auto-apply detected values once per change, but never overwrite a manual edit
+  useEffect(() => {
+    if (!hasDetection || dismissedDetection) return;
+    if (parsed.time) setTime(parsed.time);
+    if (parsed.recurrence) {
+      setRecurrence(parsed.recurrence);
+      if (parsed.customDays) setCustomDays(parsed.customDays);
+    }
+    if (parsed.urgent) setUrgent(true);
+    setAutoApplied(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsed.time, parsed.recurrence, parsed.urgent, JSON.stringify(parsed.customDays)]);
 
   const reset = () => {
     setName("");
@@ -56,14 +76,17 @@ export function AddTaskDialog({
     setRecurrence("none");
     setCustomDays([]);
     setUrgent(false);
+    setAutoApplied(false);
+    setDismissedDetection(false);
   };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed || trimmed.length > 120) return;
+    // Prefer the stripped name from the NLP parser when detection ran
+    const finalName = (hasDetection && !dismissedDetection ? parsed.name : name).trim();
+    if (!finalName || finalName.length > 120) return;
     onAdd({
-      name: trimmed,
+      name: finalName,
       time,
       recurrence,
       customDays: recurrence === "custom" ? customDays : undefined,
@@ -87,10 +110,34 @@ export function AddTaskDialog({
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ship the report"
+              placeholder='Try "Call mom tomorrow at 6pm" or "Workout every weekday urgent"'
               maxLength={120}
               autoFocus
             />
+            {hasDetection && !dismissedDetection && (
+              <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+                <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-foreground">We detected</div>
+                  <div className="text-muted-foreground truncate">
+                    {describeParsed(parsed)}
+                  </div>
+                  {parsed.name && parsed.name !== name.trim() && (
+                    <div className="text-muted-foreground mt-1">
+                      Saving as: <span className="text-foreground font-medium">{parsed.name}</span>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDismissedDetection(true)}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Dismiss detection"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="time">Due time</Label>

@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { TaskCard } from "@/components/TaskCard";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { UrgentOverlay } from "@/components/UrgentOverlay";
+import { SettingsDialog } from "@/components/SettingsDialog";
 import { useTaskStore, getStreak, todayISO, taskStage } from "@/lib/tasks";
 
 export const Route = createFileRoute("/app")({
@@ -74,6 +75,7 @@ function AppPage() {
               <Flame className="h-4 w-4" />
               {streak} day streak
             </div>
+            <SettingsDialog />
           </div>
         </div>
       </header>
