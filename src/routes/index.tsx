@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Package, Check, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,11 +31,12 @@ const emailSchema = z.string().trim().email().max(320);
 
 function AnimatedPreview() {
   const [stage, setStage] = useState<0 | 1 | 2 | 3>(0);
-  // cycle stages
-  if (typeof window !== "undefined") {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useStageCycle(setStage);
-  }
+  useEffect(() => {
+    const i = setInterval(() => {
+      setStage((s) => ((s + 1) % 4) as 0 | 1 | 2 | 3);
+    }, 1400);
+    return () => clearInterval(i);
+  }, []);
   return (
     <div className="bg-card border rounded-2xl p-5 shadow-lg max-w-sm w-full">
       <div className="flex items-center justify-between mb-3">
@@ -52,25 +53,6 @@ function AnimatedPreview() {
       </div>
     </div>
   );
-}
-
-function useStageCycle(set: (s: 0 | 1 | 2 | 3) => void) {
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const ref = useStageInterval(set);
-  return ref;
-}
-
-import { useEffect, useRef } from "react";
-function useStageInterval(set: (s: 0 | 1 | 2 | 3) => void) {
-  const ref = useRef(0);
-  useEffect(() => {
-    const i = setInterval(() => {
-      ref.current = (ref.current + 1) % 4;
-      set(ref.current as 0 | 1 | 2 | 3);
-    }, 1400);
-    return () => clearInterval(i);
-  }, [set]);
-  return ref;
 }
 
 function Landing() {
