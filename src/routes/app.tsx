@@ -101,6 +101,42 @@ function AppPage() {
       </header>
 
       <main className="max-w-xl mx-auto px-4 pt-5">
+        {activeRoutines.length > 0 && (
+          <div className="mb-4">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Routine anchors
+            </h2>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {activeRoutines.map(({ k, n }) => {
+                const isCustom = k.startsWith("custom:");
+                const def = !isCustom ? ROUTINES.find((r) => r.key === k) : undefined;
+                const Icon = def ? ROUTINE_ICONS[def.icon as keyof typeof ROUTINE_ICONS] : Sparkles;
+                const label = def?.label ?? k.replace(/^custom:/, "") ?? "Routine";
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => {
+                      const count = isCustom
+                        ? fireRoutine({ label: k.replace(/^custom:/, "") })
+                        : fireRoutine({ key: k });
+                      toast.success(
+                        `Done · ${label}`,
+                        { description: `${count} task${count === 1 ? "" : "s"} nudged` },
+                      );
+                    }}
+                    className="flex items-center gap-1.5 whitespace-nowrap rounded-full border bg-card px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted/50"
+                  >
+                    <Icon className="h-3.5 w-3.5 text-primary" />
+                    Done · {label.replace(/^After |^Before /, "")}
+                    <span className="ml-1 text-xs text-muted-foreground">{n}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="bg-card border rounded-2xl p-4 shadow-sm mb-5">
           <div className="flex items-baseline justify-between mb-2">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
