@@ -1,13 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
-import { Flame, Package, Plus, WifiOff } from "lucide-react";
+import {
+  Flame, Package, Plus, WifiOff,
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
+} from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { TaskCard } from "@/components/TaskCard";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { UrgentOverlay } from "@/components/UrgentOverlay";
 import { SettingsDialog } from "@/components/SettingsDialog";
-import { useTaskStore, getStreak, todayISO, taskStage } from "@/lib/tasks";
+import { useTaskStore, getStreak, todayISO, taskStage, ROUTINES } from "@/lib/tasks";
+
+const ROUTINE_ICONS = {
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
+} as const;
 
 export const Route = createFileRoute("/app")({
   head: () => ({
@@ -20,7 +28,7 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppPage() {
-  const { tasks, addTask, startTask, completeTask, removeTask, updateTask } =
+  const { tasks, addTask, startTask, completeTask, removeTask, updateTask, fireRoutine } =
     useTaskStore();
   const [streak, setStreak] = useState(0);
   const [online, setOnline] = useState(true);
@@ -43,6 +51,17 @@ function AppPage() {
     () => tasks.filter((t) => t.occurrenceDate === today),
     [tasks, today],
   );
+
+  // Routines that have at least one pending task attached today
+  const activeRoutines = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of todays) {
+      if (t.trigger !== "routine" || t.completedAt || t.workingAt) continue;
+      const k = t.routineKey ?? `custom:${t.routineLabel ?? ""}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([k, n]) => ({ k, n }));
+  }, [todays]);
   const done = todays.filter((t) => taskStage(t) === 3).length;
   const total = todays.length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
@@ -82,6 +101,42 @@ function AppPage() {
       </header>
 
       <main className="max-w-xl mx-auto px-4 pt-5">
+        {activeRoutines.length > 0 && (
+          <div className="mb-4">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Routine anchors
+            </h2>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {activeRoutines.map(({ k, n }) => {
+                const isCustom = k.startsWith("custom:");
+                const def = !isCustom ? ROUTINES.find((r) => r.key === k) : undefined;
+                const Icon = def ? ROUTINE_ICONS[def.icon as keyof typeof ROUTINE_ICONS] : Sparkles;
+                const label = def?.label ?? k.replace(/^custom:/, "") ?? "Routine";
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => {
+                      const count = isCustom
+                        ? fireRoutine({ label: k.replace(/^custom:/, "") })
+                        : fireRoutine({ key: k });
+                      toast.success(
+                        `Done · ${label}`,
+                        { description: `${count} task${count === 1 ? "" : "s"} nudged` },
+                      );
+                    }}
+                    className="flex items-center gap-1.5 whitespace-nowrap rounded-full border bg-card px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted/50"
+                  >
+                    <Icon className="h-3.5 w-3.5 text-primary" />
+                    Done · {label.replace(/^After |^Before /, "")}
+                    <span className="ml-1 text-xs text-muted-foreground">{n}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="bg-card border rounded-2xl p-4 shadow-sm mb-5">
           <div className="flex items-baseline justify-between mb-2">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">

@@ -2,6 +2,8 @@
 // Extracts due time, day, recurrence, urgency from free text and returns the
 // stripped task name plus suggested field values.
 
+import { ROUTINES } from "./tasks";
+
 export type Parsed = {
   name: string;
   time?: string; // HH:MM (24h)
@@ -9,6 +11,9 @@ export type Parsed = {
   recurrence?: "none" | "daily" | "weekly" | "custom";
   customDays?: number[];
   urgent?: boolean;
+  priority?: "low" | "medium" | "high";
+  routineKey?: string;
+  routineLabel?: string;
   matched: string[]; // human-readable detections, e.g. "6:00 PM", "tomorrow", "daily"
 };
 
@@ -54,9 +59,44 @@ export function parseTaskInput(raw: string): Parsed {
   let um: RegExpExecArray | null;
   while ((um = urgentRe.exec(text)) !== null) {
     out.urgent = true;
+    out.priority = "high";
     cuts.push([um.index, um.index + um[0].length]);
     if (!matched.includes("urgent")) matched.push("urgent");
   }
+
+  // --- Explicit priority words ---
+  const prioRe = /\b(high|medium|low)\s+priority\b/i;
+  const pm = prioRe.exec(text);
+  if (pm) {
+    out.priority = pm[1].toLowerCase() as "low" | "medium" | "high";
+    cuts.push([pm.index, pm.index + pm[0].length]);
+    matched.push(`${out.priority} priority`);
+  }
+
+  // --- Routine hints ---
+  // Match phrases like "after lunch", "after waking up", "before sleeping",
+  // "after reaching office", "after leaving office", "after brushing teeth"
+  const routinePatterns: Array<{ re: RegExp; key: string; label: string }> = [
+    { re: /\bafter\s+waking\s+up\b/i, key: "wake", label: "After waking up" },
+    { re: /\bafter\s+brushing(\s+teeth)?\b/i, key: "teeth", label: "After brushing teeth" },
+    { re: /\bafter\s+breakfast\b/i, key: "breakfast", label: "After breakfast" },
+    { re: /\bafter\s+lunch\b/i, key: "lunch", label: "After lunch" },
+    { re: /\bafter\s+dinner\b/i, key: "dinner", label: "After dinner" },
+    { re: /\bbefore\s+(sleeping|sleep|bed)\b/i, key: "sleep", label: "Before sleeping" },
+    { re: /\bafter\s+reaching\s+office\b/i, key: "office_in", label: "After reaching office" },
+    { re: /\bafter\s+leaving\s+office\b/i, key: "office_out", label: "After leaving office" },
+  ];
+  for (const p of routinePatterns) {
+    const rm = p.re.exec(text);
+    if (rm) {
+      out.routineKey = p.key;
+      out.routineLabel = p.label;
+      cuts.push([rm.index, rm.index + rm[0].length]);
+      matched.push(p.label.toLowerCase());
+      break;
+    }
+  }
+  void ROUTINES; // ensure import not pruned
 
   // --- Recurrence ---
   // every weekday / weekend
@@ -217,6 +257,7 @@ export function parseTaskInput(raw: string): Parsed {
 
 export function describeParsed(p: Parsed): string {
   const bits: string[] = [];
+  if (p.routineLabel) bits.push(p.routineLabel);
   if (p.time) {
     const [hh, mm] = p.time.split(":").map(Number);
     const display = `${((hh + 11) % 12) + 1}:${pad(mm)} ${hh < 12 ? "AM" : "PM"}`;
@@ -236,6 +277,7 @@ export function describeParsed(p: Parsed): string {
       bits.push(p.customDays.map((d) => dn[d]).join("/"));
     } else bits.push(p.recurrence);
   }
+  if (p.priority && p.priority !== "medium") bits.push(`${p.priority} priority`);
   if (p.urgent) bits.push("urgent");
   return bits.join(" · ");
 }

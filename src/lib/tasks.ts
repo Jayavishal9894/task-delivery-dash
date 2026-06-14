@@ -1,6 +1,37 @@
 import { useEffect, useState, useCallback } from "react";
 
 export type Recurrence = "none" | "daily" | "weekly" | "custom";
+export type Priority = "low" | "medium" | "high";
+export type TriggerType = "time" | "routine";
+
+export type RoutineDef = {
+  key: string;
+  label: string;
+  icon:
+    | "Sunrise"
+    | "Sparkles"
+    | "Coffee"
+    | "Utensils"
+    | "UtensilsCrossed"
+    | "Moon"
+    | "Building2"
+    | "LogOut"
+    | "Star";
+};
+
+export const ROUTINES: RoutineDef[] = [
+  { key: "wake", label: "After waking up", icon: "Sunrise" },
+  { key: "teeth", label: "After brushing teeth", icon: "Sparkles" },
+  { key: "breakfast", label: "After breakfast", icon: "Coffee" },
+  { key: "lunch", label: "After lunch", icon: "Utensils" },
+  { key: "dinner", label: "After dinner", icon: "UtensilsCrossed" },
+  { key: "sleep", label: "Before sleeping", icon: "Moon" },
+  { key: "office_in", label: "After reaching office", icon: "Building2" },
+  { key: "office_out", label: "After leaving office", icon: "LogOut" },
+];
+
+export const routineByKey = (k?: string) =>
+  k ? ROUTINES.find((r) => r.key === k) : undefined;
 
 export type Task = {
   id: string;
@@ -12,6 +43,11 @@ export type Task = {
   // 0-6 (Sun-Sat) for custom/weekly
   customDays?: number[];
   urgent: boolean;
+  priority: Priority;
+  trigger: TriggerType;
+  // routine key (predefined) OR free-text custom label
+  routineKey?: string;
+  routineLabel?: string;
   // ISO date (YYYY-MM-DD) for the occurrence this task represents
   occurrenceDate: string;
   createdAt?: string;
@@ -43,7 +79,11 @@ const TASKS_KEY = "trackit.tasks.v1";
 const TEMPLATES_KEY = "trackit.templates.v1";
 const STREAK_KEY = "trackit.streak.v1";
 
-const notify = (title: string, body: string) => {
+const notify = (
+  title: string,
+  body: string,
+  opts: { silent?: boolean; persistent?: boolean } = {},
+) => {
   if (typeof Notification === "undefined") return;
   if (Notification.permission !== "granted") {
     if (Notification.permission === "default") {
@@ -51,7 +91,21 @@ const notify = (title: string, body: string) => {
     }
     return;
   }
-  try { new Notification(title, { body, tag: `trackit-${title}` }); } catch { /* ignore */ }
+  try {
+    new Notification(title, {
+      body,
+      tag: `trackit-${title}-${body.slice(0, 12)}`,
+      silent: opts.silent,
+      requireInteraction: opts.persistent,
+    });
+  } catch {
+    /* ignore */
+  }
+};
+
+const vibrate = (pattern: number | number[]) => {
+  if (typeof navigator === "undefined" || !navigator.vibrate) return;
+  try { navigator.vibrate(pattern); } catch { /* ignore */ }
 };
 
 export const todayISO = () => {
@@ -102,6 +156,8 @@ const generateRecurringForToday = (templates: Template[], tasks: Task[]): Task[]
       recurrence: t.recurrence,
       customDays: t.customDays,
       urgent: t.urgent,
+      priority: t.urgent ? "high" : "medium",
+      trigger: "time",
       occurrenceDate: today,
       templateId: t.id,
       createdAt: new Date().toISOString(),
@@ -119,7 +175,13 @@ export const useTaskStore = () => {
     const loaded = load<Task[]>(TASKS_KEY, []);
     const tmpls = load<Template[]>(TEMPLATES_KEY, []);
     const generated = generateRecurringForToday(tmpls, loaded);
-    const merged = [...loaded, ...generated];
+    // Migrate legacy tasks: urgent → high priority; default trigger=time, priority=medium
+    const migrated: Task[] = [...loaded, ...generated].map((t) => ({
+      ...t,
+      priority: (t as Task).priority ?? (t.urgent ? "high" : "medium"),
+      trigger: (t as Task).trigger ?? "time",
+    }));
+    const merged = migrated;
     if (generated.length) save(TASKS_KEY, merged);
     setTasks(merged);
     setTemplates(tmpls);
@@ -134,6 +196,8 @@ export const useTaskStore = () => {
       setTasks((prev) => {
         const next = prev.map((t) => {
           if (t.completedAt) return t;
+          // Routine-based tasks don't auto-advance by time
+          if (t.trigger === "routine") return t;
           const due = new Date(t.due).getTime();
           const msLeft = due - now;
           const patch: Partial<Task> = {};
@@ -141,15 +205,29 @@ export const useTaskStore = () => {
           if (!t.workingAt && msLeft <= 30 * 60 * 1000 && msLeft > -60 * 1000) {
             patch.startedAt = t.startedAt ?? new Date().toISOString();
             patch.workingAt = new Date().toISOString();
-            notify("Trackit", `Your task "${t.name}" is now in progress — time to start.`);
+            notify("Trackit", `Your task "${t.name}" is now in progress — time to start.`, {
+              silent: t.priority === "low",
+              persistent: t.priority !== "low",
+            });
           }
           if (!t.notified10 && msLeft <= 10 * 60 * 1000 && msLeft > 0) {
             patch.notified10 = true;
-            notify("Trackit", `10 minutes left to deliver "${t.name}"`);
+            notify("Trackit", `10 minutes left to deliver "${t.name}"`, {
+              silent: t.priority === "low",
+              persistent: t.priority === "high",
+            });
+            if (t.priority === "high") vibrate([200, 100, 200]);
+            else if (t.priority === "medium") vibrate(200);
           }
           if (!t.notifiedDue && msLeft <= 0 && msLeft > -60 * 1000) {
             patch.notifiedDue = true;
-            if (!t.urgent) notify("Trackit", `"${t.name}" is due now`);
+            // High → UrgentOverlay handles vibration + alarm visually
+            if (t.priority === "medium") {
+              notify("Trackit", `"${t.name}" is due now`, { persistent: true });
+              vibrate(400);
+            } else if (t.priority === "low") {
+              notify("Trackit", `"${t.name}" is due`, { silent: true });
+            }
           }
           if (Object.keys(patch).length) {
             changed = true;
@@ -183,10 +261,22 @@ export const useTaskStore = () => {
       recurrence: Recurrence;
       customDays?: number[];
       urgent: boolean;
+      priority?: Priority;
+      trigger?: TriggerType;
+      routineKey?: string;
+      routineLabel?: string;
     }) => {
-      const [h, m] = input.time.split(":").map(Number);
+      const trigger = input.trigger ?? "time";
+      const priority: Priority =
+        input.priority ?? (input.urgent ? "high" : "medium");
       const due = new Date();
-      due.setHours(h, m, 0, 0);
+      if (trigger === "time") {
+        const [h, m] = input.time.split(":").map(Number);
+        due.setHours(h, m, 0, 0);
+      } else {
+        // Routine tasks: due at end of today so they don't surface as overdue
+        due.setHours(23, 59, 0, 0);
+      }
       const id = crypto.randomUUID();
       let templateId: string | undefined;
       if (input.recurrence !== "none") {
@@ -196,7 +286,7 @@ export const useTaskStore = () => {
           time: input.time,
           recurrence: input.recurrence,
           customDays: input.customDays,
-          urgent: input.urgent,
+          urgent: priority === "high" && input.urgent,
           createdAt: new Date().toISOString(),
           lastGenerated: todayISO(),
         };
@@ -209,7 +299,11 @@ export const useTaskStore = () => {
         due: due.toISOString(),
         recurrence: input.recurrence,
         customDays: input.customDays,
-        urgent: input.urgent,
+        urgent: priority === "high" && input.urgent,
+        priority,
+        trigger,
+        routineKey: trigger === "routine" ? input.routineKey : undefined,
+        routineLabel: trigger === "routine" ? input.routineLabel : undefined,
         occurrenceDate: todayISO(),
         templateId,
         createdAt: new Date().toISOString(),
@@ -280,6 +374,37 @@ export const useTaskStore = () => {
     persistTasks(tasks.filter((t) => t.id !== id));
   };
 
+  // Fire a routine — moves all matching incomplete routine tasks into the
+  // "In Progress" stage so the user sees them as immediate nudges.
+  const fireRoutine = useCallback(
+    (matcher: { key?: string; label?: string }) => {
+      const now = new Date().toISOString();
+      const today = todayISO();
+      let count = 0;
+      const next = tasks.map((t) => {
+        if (t.completedAt) return t;
+        if (t.trigger !== "routine") return t;
+        if (t.occurrenceDate !== today) return t;
+        const matches =
+          (matcher.key && t.routineKey === matcher.key) ||
+          (matcher.label &&
+            t.routineLabel?.toLowerCase() === matcher.label.toLowerCase());
+        if (!matches) return t;
+        count++;
+        return {
+          ...t,
+          startedAt: t.startedAt ?? now,
+          workingAt: now,
+          // Bring deadline close so progress fills meaningfully
+          due: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        };
+      });
+      persistTasks(next);
+      return count;
+    },
+    [tasks],
+  );
+
   return {
     tasks,
     templates,
@@ -288,6 +413,7 @@ export const useTaskStore = () => {
     startTask,
     completeTask,
     removeTask,
+    fireRoutine,
   };
 };
 

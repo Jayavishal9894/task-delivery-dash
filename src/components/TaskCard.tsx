@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
-import { Check, Clock, Zap, Share2, Pencil } from "lucide-react";
+import {
+  Check, Clock, Zap, Share2, Pencil,
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star,
+} from "lucide-react";
 import { DeliveryTracker } from "./DeliveryTracker";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,8 +11,13 @@ import {
   isOverdue,
   formatTime,
   progressPercent,
+  routineByKey,
 } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
+
+const ROUTINE_ICONS = {
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star,
+} as const;
 
 export function TaskCard({
   task,
@@ -93,14 +101,12 @@ export function TaskCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-foreground truncate">{task.name}</h3>
+            <PriorityBadge priority={task.priority} />
             {task.urgent && (
               <Zap className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
             )}
           </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-            <Clock className="h-3 w-3" />
-            <span>Due {formatTime(task.due)}</span>
-          </div>
+          <TaskMeta task={task} />
         </div>
         <div className="text-primary font-bold text-lg flex-shrink-0">{pct}%</div>
       </div>
@@ -212,4 +218,42 @@ function formatRemaining(ms: number): string {
   const h = Math.floor(m / 60);
   const rm = m % 60;
   return `${h}h ${rm}m left`;
+}
+
+function PriorityBadge({ priority }: { priority: Task["priority"] }) {
+  const map = {
+    high: "bg-red-100 text-red-700 border-red-200",
+    medium: "bg-amber-100 text-amber-700 border-amber-200",
+    low: "bg-slate-100 text-slate-600 border-slate-200",
+  } as const;
+  return (
+    <span
+      className={cn(
+        "text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border",
+        map[priority] ?? map.medium,
+      )}
+    >
+      {priority}
+    </span>
+  );
+}
+
+function TaskMeta({ task }: { task: Task }) {
+  if (task.trigger === "routine") {
+    const def = routineByKey(task.routineKey);
+    const Icon = def ? ROUTINE_ICONS[def.icon] : Star;
+    const label = def?.label ?? task.routineLabel ?? "Routine";
+    return (
+      <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+        <Icon className="h-3 w-3" />
+        <span>{label}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+      <Clock className="h-3 w-3" />
+      <span>Due {formatTime(task.due)}</span>
+    </div>
+  );
 }

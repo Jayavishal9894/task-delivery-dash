@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Info, Sparkles, X } from "lucide-react";
+import { Info, Sparkles, X, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +24,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { Recurrence } from "@/lib/tasks";
+import type { Recurrence, Priority, TriggerType } from "@/lib/tasks";
+import { ROUTINES } from "@/lib/tasks";
 import { parseTaskInput, describeParsed } from "@/lib/nlp";
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -40,6 +41,10 @@ export function AddTaskDialog({
     recurrence: Recurrence;
     customDays?: number[];
     urgent: boolean;
+    priority: Priority;
+    trigger: TriggerType;
+    routineKey?: string;
+    routineLabel?: string;
   }) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -50,12 +55,21 @@ export function AddTaskDialog({
   const [recurrence, setRecurrence] = useState<Recurrence>("none");
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [urgent, setUrgent] = useState(false);
+  const [priority, setPriority] = useState<Priority>("medium");
+  const [triggerType, setTriggerType] = useState<TriggerType>("time");
+  const [routineKey, setRoutineKey] = useState<string>("lunch");
+  const [customRoutine, setCustomRoutine] = useState("");
   const [autoApplied, setAutoApplied] = useState(false);
   const [dismissedDetection, setDismissedDetection] = useState(false);
 
   const parsed = useMemo(() => parseTaskInput(name), [name]);
   const hasDetection =
-    !!parsed.time || !!parsed.date || !!parsed.recurrence || !!parsed.urgent;
+    !!parsed.time ||
+    !!parsed.date ||
+    !!parsed.recurrence ||
+    !!parsed.urgent ||
+    !!parsed.priority ||
+    !!parsed.routineKey;
 
   // Auto-apply detected values once per change, but never overwrite a manual edit
   useEffect(() => {
@@ -66,9 +80,26 @@ export function AddTaskDialog({
       if (parsed.customDays) setCustomDays(parsed.customDays);
     }
     if (parsed.urgent) setUrgent(true);
+    if (parsed.priority) setPriority(parsed.priority);
+    if (parsed.routineKey) {
+      setTriggerType("routine");
+      setRoutineKey(parsed.routineKey);
+    }
     setAutoApplied(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsed.time, parsed.recurrence, parsed.urgent, JSON.stringify(parsed.customDays)]);
+  }, [
+    parsed.time,
+    parsed.recurrence,
+    parsed.urgent,
+    parsed.priority,
+    parsed.routineKey,
+    JSON.stringify(parsed.customDays),
+  ]);
+
+  // Urgent toggle is only meaningful on high priority
+  useEffect(() => {
+    if (priority !== "high" && urgent) setUrgent(false);
+  }, [priority, urgent]);
 
   const reset = () => {
     setName("");
@@ -76,6 +107,10 @@ export function AddTaskDialog({
     setRecurrence("none");
     setCustomDays([]);
     setUrgent(false);
+    setPriority("medium");
+    setTriggerType("time");
+    setRoutineKey("lunch");
+    setCustomRoutine("");
     setAutoApplied(false);
     setDismissedDetection(false);
   };
@@ -85,12 +120,21 @@ export function AddTaskDialog({
     // Prefer the stripped name from the NLP parser when detection ran
     const finalName = (hasDetection && !dismissedDetection ? parsed.name : name).trim();
     if (!finalName || finalName.length > 120) return;
+    const isCustom = routineKey === "__custom";
+    const routineLabel = isCustom
+      ? customRoutine.trim()
+      : ROUTINES.find((r) => r.key === routineKey)?.label;
+    if (triggerType === "routine" && !routineLabel) return;
     onAdd({
       name: finalName,
       time,
       recurrence,
       customDays: recurrence === "custom" ? customDays : undefined,
       urgent,
+      priority,
+      trigger: triggerType,
+      routineKey: triggerType === "routine" ? (isCustom ? undefined : routineKey) : undefined,
+      routineLabel: triggerType === "routine" ? routineLabel : undefined,
     });
     reset();
     setOpen(false);
@@ -139,14 +183,109 @@ export function AddTaskDialog({
               </div>
             )}
           </div>
+          {/* Trigger type */}
           <div className="space-y-2">
-            <Label htmlFor="time">Due time</Label>
-            <Input
-              id="time"
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-            />
+            <Label>When should this trigger?</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setTriggerType("time")}
+                className={`h-10 rounded-md border text-sm font-medium transition-colors ${
+                  triggerType === "time"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-foreground border-input"
+                }`}
+              >
+                At a specific time
+              </button>
+              <button
+                type="button"
+                onClick={() => setTriggerType("routine")}
+                className={`h-10 rounded-md border text-sm font-medium transition-colors ${
+                  triggerType === "routine"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-foreground border-input"
+                }`}
+              >
+                After a routine
+              </button>
+            </div>
+          </div>
+
+          {triggerType === "time" ? (
+            <div className="space-y-2">
+              <Label htmlFor="time">Due time</Label>
+              <Input
+                id="time"
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+              />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Routine anchor</Label>
+              <Select value={routineKey} onValueChange={setRoutineKey}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROUTINES.map((r) => (
+                    <SelectItem key={r.key} value={r.key}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__custom">Custom routine…</SelectItem>
+                </SelectContent>
+              </Select>
+              {routineKey === "__custom" && (
+                <Input
+                  placeholder="e.g. After my run"
+                  value={customRoutine}
+                  onChange={(e) => setCustomRoutine(e.target.value)}
+                  maxLength={60}
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                We'll remind you when you mark "
+                {routineKey === "__custom"
+                  ? (customRoutine.trim() || "your routine")
+                  : ROUTINES.find((r) => r.key === routineKey)?.label}
+                " as done.
+              </p>
+            </div>
+          )}
+
+          {/* Priority */}
+          <div className="space-y-2">
+            <Label>Priority</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {(["low", "medium", "high"] as Priority[]).map((p) => {
+                const active = priority === p;
+                const cls =
+                  p === "high"
+                    ? active ? "bg-red-500 text-white border-red-500" : "text-red-600 border-red-200"
+                    : p === "medium"
+                      ? active ? "bg-amber-500 text-white border-amber-500" : "text-amber-700 border-amber-200"
+                      : active ? "bg-slate-500 text-white border-slate-500" : "text-slate-600 border-slate-200";
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPriority(p)}
+                    className={`h-10 rounded-md border text-sm font-semibold capitalize transition-colors ${cls}`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+            {priority === "high" && (
+              <div className="flex items-start gap-2 text-xs rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span>This will interrupt you with a full screen alert at the deadline.</span>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Recurring</Label>
@@ -187,7 +326,7 @@ export function AddTaskDialog({
               })}
             </div>
           )}
-          <div className="flex items-center justify-between rounded-lg border p-3">
+          <div className={`flex items-center justify-between rounded-lg border p-3 ${priority !== "high" ? "opacity-50" : ""}`}>
             <div className="flex items-center gap-2">
               <Label htmlFor="urgent" className="font-semibold">
                 Urgent mode
@@ -200,12 +339,19 @@ export function AddTaskDialog({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    We'll annoy you until this is done
+                    {priority === "high"
+                      ? "We'll keep alarming until you mark this done."
+                      : "Only available on High priority tasks."}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <Switch id="urgent" checked={urgent} onCheckedChange={setUrgent} />
+            <Switch
+              id="urgent"
+              checked={urgent}
+              onCheckedChange={setUrgent}
+              disabled={priority !== "high"}
+            />
           </div>
           <Button
             type="submit"
