@@ -219,3 +219,41 @@ function formatRemaining(ms: number): string {
   const rm = m % 60;
   return `${h}h ${rm}m left`;
 }
+
+function PriorityBadge({ priority }: { priority: Task["priority"] }) {
+  const map = {
+    high: "bg-red-100 text-red-700 border-red-200",
+    medium: "bg-amber-100 text-amber-700 border-amber-200",
+    low: "bg-slate-100 text-slate-600 border-slate-200",
+  } as const;
+  return (
+    <span
+      className={cn(
+        "text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border",
+        map[priority] ?? map.medium,
+      )}
+    >
+      {priority}
+    </span>
+  );
+}
+
+function TaskMeta({ task }: { task: Task }) {
+  if (task.trigger === "routine") {
+    const def = routineByKey(task.routineKey);
+    const Icon = def ? ROUTINE_ICONS[def.icon] : Star;
+    const label = def?.label ?? task.routineLabel ?? "Routine";
+    return (
+      <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+        <Icon className="h-3 w-3" />
+        <span>{label}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+      <Clock className="h-3 w-3" />
+      <span>Due {formatTime(task.due)}</span>
+    </div>
+  );
+}
