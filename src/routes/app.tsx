@@ -20,7 +20,8 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppPage() {
-  const { tasks, addTask, startTask, completeTask, removeTask } = useTaskStore();
+  const { tasks, addTask, startTask, completeTask, removeTask, updateTask } =
+    useTaskStore();
   const [streak, setStreak] = useState(0);
   const [online, setOnline] = useState(true);
 
@@ -109,6 +110,14 @@ function AppPage() {
                 onStart={() => startTask(t.id)}
                 onComplete={() => completeTask(t.id)}
                 onDelete={() => removeTask(t.id)}
+                onSnooze={() =>
+                  updateTask(t.id, {
+                    due: new Date(
+                      Math.max(Date.now(), new Date(t.due).getTime()) +
+                        10 * 60 * 1000,
+                    ).toISOString(),
+                  })
+                }
               />
             ))}
           </div>

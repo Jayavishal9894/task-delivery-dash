@@ -5,6 +5,7 @@ export type Recurrence = "none" | "daily" | "weekly" | "custom";
 export type Task = {
   id: string;
   name: string;
+  description?: string;
   // ISO datetime for due
   due: string;
   recurrence: Recurrence;
