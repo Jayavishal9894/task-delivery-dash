@@ -14,12 +14,17 @@ export type Task = {
   urgent: boolean;
   // ISO date (YYYY-MM-DD) for the occurrence this task represents
   occurrenceDate: string;
+  createdAt?: string;
   startedAt?: string;
   workingAt?: string;
   completedAt?: string;
   // Template id this occurrence was generated from (for recurring)
   templateId?: string;
   urgentDismissed?: boolean;
+  // Notifications fired
+  notified30?: boolean;
+  notified10?: boolean;
+  notifiedDue?: boolean;
 };
 
 export type Template = {
@@ -37,6 +42,17 @@ export type Template = {
 const TASKS_KEY = "trackit.tasks.v1";
 const TEMPLATES_KEY = "trackit.templates.v1";
 const STREAK_KEY = "trackit.streak.v1";
+
+const notify = (title: string, body: string) => {
+  if (typeof Notification === "undefined") return;
+  if (Notification.permission !== "granted") {
+    if (Notification.permission === "default") {
+      try { Notification.requestPermission().catch(() => {}); } catch { /* ignore */ }
+    }
+    return;
+  }
+  try { new Notification(title, { body, tag: `trackit-${title}` }); } catch { /* ignore */ }
+};
 
 export const todayISO = () => {
   const d = new Date();
@@ -88,6 +104,7 @@ const generateRecurringForToday = (templates: Template[], tasks: Task[]): Task[]
       urgent: t.urgent,
       occurrenceDate: today,
       templateId: t.id,
+      createdAt: new Date().toISOString(),
     });
   }
   return newTasks;
@@ -108,9 +125,45 @@ export const useTaskStore = () => {
     setTemplates(tmpls);
   }, []);
 
-  // tick every 30s so UI re-evaluates overdue/urgent
+  // tick every 15s: re-evaluate overdue, auto-advance to "In Progress" 30 min
+  // before deadline, and fire 10-min / due notifications
   useEffect(() => {
-    const i = setInterval(() => force((x) => x + 1), 30000);
+    const tick = () => {
+      const now = Date.now();
+      let changed = false;
+      setTasks((prev) => {
+        const next = prev.map((t) => {
+          if (t.completedAt) return t;
+          const due = new Date(t.due).getTime();
+          const msLeft = due - now;
+          const patch: Partial<Task> = {};
+          // auto move to In Progress 30 min before deadline
+          if (!t.workingAt && msLeft <= 30 * 60 * 1000 && msLeft > -60 * 1000) {
+            patch.startedAt = t.startedAt ?? new Date().toISOString();
+            patch.workingAt = new Date().toISOString();
+            notify("Trackit", `Your task "${t.name}" is now in progress — time to start.`);
+          }
+          if (!t.notified10 && msLeft <= 10 * 60 * 1000 && msLeft > 0) {
+            patch.notified10 = true;
+            notify("Trackit", `10 minutes left to deliver "${t.name}"`);
+          }
+          if (!t.notifiedDue && msLeft <= 0 && msLeft > -60 * 1000) {
+            patch.notifiedDue = true;
+            if (!t.urgent) notify("Trackit", `"${t.name}" is due now`);
+          }
+          if (Object.keys(patch).length) {
+            changed = true;
+            return { ...t, ...patch };
+          }
+          return t;
+        });
+        if (changed) save(TASKS_KEY, next);
+        return next;
+      });
+      force((x) => x + 1);
+    };
+    tick();
+    const i = setInterval(tick, 15000);
     return () => clearInterval(i);
   }, []);
 
@@ -159,8 +212,25 @@ export const useTaskStore = () => {
         urgent: input.urgent,
         occurrenceDate: todayISO(),
         templateId,
+        createdAt: new Date().toISOString(),
       };
       persistTasks([...tasks, task]);
+      // Auto-confirm "Scheduled" stage 1s after creation
+      setTimeout(() => {
+        setTasks((prev) => {
+          const next = prev.map((t) =>
+            t.id === id && !t.startedAt
+              ? { ...t, startedAt: new Date().toISOString() }
+              : t,
+          );
+          save(TASKS_KEY, next);
+          return next;
+        });
+      }, 1000);
+      // Request notification permission opportunistically
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        try { Notification.requestPermission().catch(() => {}); } catch { /* ignore */ }
+      }
     },
     [tasks, templates],
   );
@@ -251,4 +321,16 @@ export const formatOverdue = (ms: number) => {
   if (m < 60) return `${m} min overdue`;
   const h = Math.floor(m / 60);
   return `${h} hr${h > 1 ? "s" : ""} overdue`;
+};
+
+// Time-based progress percentage. Fills linearly from createdAt to due.
+// 100% when completed; 100% (capped) at deadline.
+export const progressPercent = (t: Task): number => {
+  if (t.completedAt) return 100;
+  const due = new Date(t.due).getTime();
+  const start = t.createdAt ? new Date(t.createdAt).getTime() : due - 60 * 60 * 1000;
+  const total = Math.max(1, due - start);
+  const elapsed = Date.now() - start;
+  const pct = Math.round((elapsed / total) * 100);
+  return Math.max(0, Math.min(100, pct));
 };
