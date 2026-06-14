@@ -257,6 +257,7 @@ export function parseTaskInput(raw: string): Parsed {
 
 export function describeParsed(p: Parsed): string {
   const bits: string[] = [];
+  if (p.routineLabel) bits.push(p.routineLabel);
   if (p.time) {
     const [hh, mm] = p.time.split(":").map(Number);
     const display = `${((hh + 11) % 12) + 1}:${pad(mm)} ${hh < 12 ? "AM" : "PM"}`;
@@ -276,6 +277,7 @@ export function describeParsed(p: Parsed): string {
       bits.push(p.customDays.map((d) => dn[d]).join("/"));
     } else bits.push(p.recurrence);
   }
+  if (p.priority && p.priority !== "medium") bits.push(`${p.priority} priority`);
   if (p.urgent) bits.push("urgent");
   return bits.join(" · ");
 }
