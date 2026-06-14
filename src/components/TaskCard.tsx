@@ -101,14 +101,12 @@ export function TaskCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-foreground truncate">{task.name}</h3>
+            <PriorityBadge priority={task.priority} />
             {task.urgent && (
               <Zap className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
             )}
           </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-            <Clock className="h-3 w-3" />
-            <span>Due {formatTime(task.due)}</span>
-          </div>
+          <TaskMeta task={task} />
         </div>
         <div className="text-primary font-bold text-lg flex-shrink-0">{pct}%</div>
       </div>
