@@ -58,7 +58,7 @@ export function UrgentOverlay({
         /* ignore */
       }
       for (const t of tasks) {
-        if (!t.urgent || t.completedAt) continue;
+        if (t.priority !== "high" || t.trigger === "routine" || t.completedAt) continue;
         const due = new Date(t.due).getTime();
         const last = map[t.id] ?? 0;
         const preWindow = due - 5 * 60 * 1000;
