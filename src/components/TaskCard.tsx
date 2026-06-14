@@ -7,6 +7,7 @@ import {
   taskStage,
   isOverdue,
   formatTime,
+  progressPercent,
 } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +32,7 @@ export function TaskCard({
 
   useEffect(() => {
     if (done) return;
-    const i = setInterval(() => tick((x) => x + 1), 30000);
+    const i = setInterval(() => tick((x) => x + 1), 15000);
     return () => clearInterval(i);
   }, [done]);
 
@@ -46,7 +47,9 @@ export function TaskCard({
     }
   }, [done, task.completedAt]);
 
-  const pct = done ? 100 : Math.round((stage / 3) * 100) + (stage < 3 ? 5 : 0);
+  const pct = progressPercent(task);
+  const justAdded =
+    !!task.createdAt && Date.now() - new Date(task.createdAt).getTime() < 1500;
   const dueDate = new Date(task.due);
   const msLeft = dueDate.getTime() - Date.now();
   const timeLeft = formatRemaining(msLeft);
@@ -105,14 +108,21 @@ export function TaskCard({
       {/* Progress bar */}
       <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
         <div
-          className="h-full bg-primary transition-all duration-500"
+          className={cn(
+            "h-full transition-all duration-500",
+            done ? "bg-primary" : overdue ? "bg-red-500" : "bg-primary",
+          )}
           style={{ width: `${pct}%` }}
         />
       </div>
 
       {/* Tracker */}
       <div className="pt-1">
-        <DeliveryTracker stage={stage} overdue={overdue && !done} />
+        <DeliveryTracker
+          stage={stage}
+          overdue={overdue && !done}
+          justAdded={justAdded}
+        />
       </div>
 
       {/* Time remaining */}
