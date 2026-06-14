@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
-import { Check, Clock, Zap, Share2, Pencil } from "lucide-react";
+import {
+  Check, Clock, Zap, Share2, Pencil,
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star,
+} from "lucide-react";
 import { DeliveryTracker } from "./DeliveryTracker";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,8 +11,13 @@ import {
   isOverdue,
   formatTime,
   progressPercent,
+  routineByKey,
 } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
+
+const ROUTINE_ICONS = {
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star,
+} as const;
 
 export function TaskCard({
   task,
