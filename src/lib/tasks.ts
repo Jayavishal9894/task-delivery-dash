@@ -156,6 +156,8 @@ const generateRecurringForToday = (templates: Template[], tasks: Task[]): Task[]
       recurrence: t.recurrence,
       customDays: t.customDays,
       urgent: t.urgent,
+      priority: t.urgent ? "high" : "medium",
+      trigger: "time",
       occurrenceDate: today,
       templateId: t.id,
       createdAt: new Date().toISOString(),
