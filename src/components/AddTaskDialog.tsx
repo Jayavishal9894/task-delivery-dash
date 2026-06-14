@@ -326,7 +326,7 @@ export function AddTaskDialog({
               })}
             </div>
           )}
-          <div className="flex items-center justify-between rounded-lg border p-3">
+          <div className={`flex items-center justify-between rounded-lg border p-3 ${priority !== "high" ? "opacity-50" : ""}`}>
             <div className="flex items-center gap-2">
               <Label htmlFor="urgent" className="font-semibold">
                 Urgent mode
@@ -339,12 +339,19 @@ export function AddTaskDialog({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    We'll annoy you until this is done
+                    {priority === "high"
+                      ? "We'll keep alarming until you mark this done."
+                      : "Only available on High priority tasks."}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <Switch id="urgent" checked={urgent} onCheckedChange={setUrgent} />
+            <Switch
+              id="urgent"
+              checked={urgent}
+              onCheckedChange={setUrgent}
+              disabled={priority !== "high"}
+            />
           </div>
           <Button
             type="submit"
