@@ -1,15 +1,12 @@
 import { useState, useEffect } from "react";
-import { Check, Clock, Trash2, Zap } from "lucide-react";
+import { Check, Clock, Zap, Share2, Pencil } from "lucide-react";
 import { DeliveryTracker } from "./DeliveryTracker";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Task,
   taskStage,
   isOverdue,
-  overdueMs,
   formatTime,
-  formatOverdue,
 } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
@@ -18,16 +15,25 @@ export function TaskCard({
   onStart,
   onComplete,
   onDelete,
+  onSnooze,
 }: {
   task: Task;
   onStart: () => void;
   onComplete: () => void;
   onDelete: () => void;
+  onSnooze: () => void;
 }) {
   const stage = taskStage(task);
   const overdue = isOverdue(task);
   const done = stage === 3;
   const [celebrate, setCelebrate] = useState(false);
+  const [, tick] = useState(0);
+
+  useEffect(() => {
+    if (done) return;
+    const i = setInterval(() => tick((x) => x + 1), 30000);
+    return () => clearInterval(i);
+  }, [done]);
 
   useEffect(() => {
     if (done && task.completedAt) {
@@ -40,18 +46,32 @@ export function TaskCard({
     }
   }, [done, task.completedAt]);
 
-  const badge = done
-    ? { label: "Delivered", className: "bg-primary text-primary-foreground" }
-    : overdue
-      ? { label: "Delayed", className: "bg-red-500 text-white" }
-      : stage > 0
-        ? { label: "In progress", className: "bg-amber-500 text-white" }
-        : { label: "Pending", className: "bg-muted text-foreground" };
+  const pct = done ? 100 : Math.round((stage / 3) * 100) + (stage < 3 ? 5 : 0);
+  const dueDate = new Date(task.due);
+  const msLeft = dueDate.getTime() - Date.now();
+  const timeLeft = formatRemaining(msLeft);
+
+  const handleShare = async () => {
+    const text = `${task.name} — due ${formatTime(task.due)}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: task.name, text });
+      } catch {
+        /* ignore */
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
 
   return (
     <div
       className={cn(
-        "relative bg-card border rounded-2xl p-4 shadow-sm transition-all",
+        "relative bg-card border rounded-2xl p-5 shadow-sm transition-all space-y-4",
         overdue && !done && "border-red-300",
         done && "opacity-70",
       )}
@@ -64,7 +84,9 @@ export function TaskCard({
           </div>
         </div>
       )}
-      <div className="flex items-start justify-between gap-2 mb-3">
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-foreground truncate">{task.name}</h3>
@@ -77,50 +99,107 @@ export function TaskCard({
             <span>Due {formatTime(task.due)}</span>
           </div>
         </div>
-        <Badge className={cn("text-xs flex-shrink-0", badge.className)}>
-          {badge.label}
-        </Badge>
+        <div className="text-primary font-bold text-lg flex-shrink-0">{pct}%</div>
       </div>
 
-      <div className="py-2">
+      {/* Progress bar */}
+      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+        <div
+          className="h-full bg-primary transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      {/* Tracker */}
+      <div className="pt-1">
         <DeliveryTracker stage={stage} overdue={overdue && !done} />
       </div>
 
-      {overdue && !done && (
-        <div className="mt-3 text-xs text-red-600 bg-red-50 rounded-md px-2 py-1.5 font-medium">
-          {formatOverdue(overdueMs(task))} · nudge sent
+      {/* Time remaining */}
+      {!done && (
+        <div className="bg-muted/40 border rounded-xl p-3">
+          <div className="text-[10px] font-semibold tracking-wider text-muted-foreground">
+            TIME REMAINING
+          </div>
+          <div
+            className={cn(
+              "text-xl font-bold mt-0.5",
+              overdue ? "text-red-500" : "text-primary",
+            )}
+          >
+            {timeLeft}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Ends at {formatTime(task.due)}
+          </div>
         </div>
       )}
 
+      {/* About */}
+      {task.description && (
+        <div className="bg-muted/40 border rounded-xl p-3">
+          <div className="text-[10px] font-semibold tracking-wider text-muted-foreground">
+            ABOUT THIS TASK
+          </div>
+          <p className="text-sm text-foreground mt-1 leading-snug">
+            {task.description}
+          </p>
+        </div>
+      )}
+
+      {/* Actions */}
       {!done && (
-        <div className="flex gap-2 mt-3">
-          {stage === 0 && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
             <Button
               variant="outline"
-              size="sm"
-              className="flex-1"
-              onClick={onStart}
+              className="flex-1 h-11 rounded-xl bg-background"
+              onClick={() => {
+                if (stage === 0) onStart();
+                onSnooze();
+              }}
             >
-              Start
+              <Clock className="h-4 w-4 mr-1" /> Snooze
             </Button>
-          )}
-          <Button
-            size="sm"
-            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
-            onClick={onComplete}
-          >
-            <Check className="h-4 w-4 mr-1" /> Mark done
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onDelete}
-            className="text-muted-foreground"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+            <Button
+              className="flex-1 h-11 rounded-xl bg-slate-900 hover:bg-slate-800 text-white"
+              onClick={onComplete}
+            >
+              <Check className="h-4 w-4 mr-1" strokeWidth={3} /> Mark as Done
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              className="flex-1 h-11 rounded-xl bg-black hover:bg-black/90 text-white"
+              onClick={onDelete}
+            >
+              <Pencil className="h-4 w-4 mr-1" /> Edit
+            </Button>
+            <Button
+              className="flex-1 h-11 rounded-xl bg-black hover:bg-black/90 text-white"
+              onClick={handleShare}
+            >
+              <Share2 className="h-4 w-4 mr-1" /> Share
+            </Button>
+          </div>
         </div>
       )}
     </div>
   );
+}
+
+function formatRemaining(ms: number): string {
+  if (ms <= 0) {
+    const over = Math.abs(ms);
+    const m = Math.floor(over / 60000);
+    if (m < 60) return `${m}m overdue`;
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return `${h}h ${rm}m overdue`;
+  }
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return `${m}m left`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return `${h}h ${rm}m left`;
 }
