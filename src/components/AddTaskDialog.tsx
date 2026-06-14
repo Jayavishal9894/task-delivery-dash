@@ -183,14 +183,109 @@ export function AddTaskDialog({
               </div>
             )}
           </div>
+          {/* Trigger type */}
           <div className="space-y-2">
-            <Label htmlFor="time">Due time</Label>
-            <Input
-              id="time"
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-            />
+            <Label>When should this trigger?</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setTriggerType("time")}
+                className={`h-10 rounded-md border text-sm font-medium transition-colors ${
+                  triggerType === "time"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-foreground border-input"
+                }`}
+              >
+                At a specific time
+              </button>
+              <button
+                type="button"
+                onClick={() => setTriggerType("routine")}
+                className={`h-10 rounded-md border text-sm font-medium transition-colors ${
+                  triggerType === "routine"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-foreground border-input"
+                }`}
+              >
+                After a routine
+              </button>
+            </div>
+          </div>
+
+          {triggerType === "time" ? (
+            <div className="space-y-2">
+              <Label htmlFor="time">Due time</Label>
+              <Input
+                id="time"
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+              />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Routine anchor</Label>
+              <Select value={routineKey} onValueChange={setRoutineKey}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROUTINES.map((r) => (
+                    <SelectItem key={r.key} value={r.key}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__custom">Custom routine…</SelectItem>
+                </SelectContent>
+              </Select>
+              {routineKey === "__custom" && (
+                <Input
+                  placeholder="e.g. After my run"
+                  value={customRoutine}
+                  onChange={(e) => setCustomRoutine(e.target.value)}
+                  maxLength={60}
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                We'll remind you when you mark "
+                {routineKey === "__custom"
+                  ? (customRoutine.trim() || "your routine")
+                  : ROUTINES.find((r) => r.key === routineKey)?.label}
+                " as done.
+              </p>
+            </div>
+          )}
+
+          {/* Priority */}
+          <div className="space-y-2">
+            <Label>Priority</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {(["low", "medium", "high"] as Priority[]).map((p) => {
+                const active = priority === p;
+                const cls =
+                  p === "high"
+                    ? active ? "bg-red-500 text-white border-red-500" : "text-red-600 border-red-200"
+                    : p === "medium"
+                      ? active ? "bg-amber-500 text-white border-amber-500" : "text-amber-700 border-amber-200"
+                      : active ? "bg-slate-500 text-white border-slate-500" : "text-slate-600 border-slate-200";
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPriority(p)}
+                    className={`h-10 rounded-md border text-sm font-semibold capitalize transition-colors ${cls}`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+            {priority === "high" && (
+              <div className="flex items-start gap-2 text-xs rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span>This will interrupt you with a full screen alert at the deadline.</span>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Recurring</Label>
