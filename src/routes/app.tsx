@@ -1,13 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
-import { Flame, Package, Plus, WifiOff } from "lucide-react";
+import {
+  Flame, Package, Plus, WifiOff,
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
+} from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { TaskCard } from "@/components/TaskCard";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { UrgentOverlay } from "@/components/UrgentOverlay";
 import { SettingsDialog } from "@/components/SettingsDialog";
-import { useTaskStore, getStreak, todayISO, taskStage } from "@/lib/tasks";
+import { useTaskStore, getStreak, todayISO, taskStage, ROUTINES } from "@/lib/tasks";
+
+const ROUTINE_ICONS = {
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
+} as const;
 
 export const Route = createFileRoute("/app")({
   head: () => ({
@@ -20,7 +28,7 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppPage() {
-  const { tasks, addTask, startTask, completeTask, removeTask, updateTask } =
+  const { tasks, addTask, startTask, completeTask, removeTask, updateTask, fireRoutine } =
     useTaskStore();
   const [streak, setStreak] = useState(0);
   const [online, setOnline] = useState(true);
@@ -43,6 +51,17 @@ function AppPage() {
     () => tasks.filter((t) => t.occurrenceDate === today),
     [tasks, today],
   );
+
+  // Routines that have at least one pending task attached today
+  const activeRoutines = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of todays) {
+      if (t.trigger !== "routine" || t.completedAt || t.workingAt) continue;
+      const k = t.routineKey ?? `custom:${t.routineLabel ?? ""}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([k, n]) => ({ k, n }));
+  }, [todays]);
   const done = todays.filter((t) => taskStage(t) === 3).length;
   const total = todays.length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
