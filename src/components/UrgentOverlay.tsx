@@ -31,9 +31,14 @@ export function UrgentOverlay({
   tasks: Task[];
   onComplete: (id: string) => void;
 }) {
-  // urgent tasks not completed and not dismissed for the deadline
+  // High-priority tasks at/after deadline trigger the full-screen alert.
+  // Routine tasks never fire the overlay (no time-based deadline).
   const active = tasks.filter(
-    (t) => t.urgent && !t.completedAt && new Date(t.due).getTime() <= Date.now(),
+    (t) =>
+      t.priority === "high" &&
+      t.trigger !== "routine" &&
+      !t.completedAt &&
+      new Date(t.due).getTime() <= Date.now(),
   );
   const current = active[0];
 
