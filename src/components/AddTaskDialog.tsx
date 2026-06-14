@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Info, Sparkles, X } from "lucide-react";
+import { Info, Sparkles, X, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +24,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { Recurrence } from "@/lib/tasks";
+import type { Recurrence, Priority, TriggerType } from "@/lib/tasks";
+import { ROUTINES } from "@/lib/tasks";
 import { parseTaskInput, describeParsed } from "@/lib/nlp";
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -40,6 +41,10 @@ export function AddTaskDialog({
     recurrence: Recurrence;
     customDays?: number[];
     urgent: boolean;
+    priority: Priority;
+    trigger: TriggerType;
+    routineKey?: string;
+    routineLabel?: string;
   }) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -50,12 +55,21 @@ export function AddTaskDialog({
   const [recurrence, setRecurrence] = useState<Recurrence>("none");
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [urgent, setUrgent] = useState(false);
+  const [priority, setPriority] = useState<Priority>("medium");
+  const [triggerType, setTriggerType] = useState<TriggerType>("time");
+  const [routineKey, setRoutineKey] = useState<string>("lunch");
+  const [customRoutine, setCustomRoutine] = useState("");
   const [autoApplied, setAutoApplied] = useState(false);
   const [dismissedDetection, setDismissedDetection] = useState(false);
 
   const parsed = useMemo(() => parseTaskInput(name), [name]);
   const hasDetection =
-    !!parsed.time || !!parsed.date || !!parsed.recurrence || !!parsed.urgent;
+    !!parsed.time ||
+    !!parsed.date ||
+    !!parsed.recurrence ||
+    !!parsed.urgent ||
+    !!parsed.priority ||
+    !!parsed.routineKey;
 
   // Auto-apply detected values once per change, but never overwrite a manual edit
   useEffect(() => {
@@ -66,9 +80,26 @@ export function AddTaskDialog({
       if (parsed.customDays) setCustomDays(parsed.customDays);
     }
     if (parsed.urgent) setUrgent(true);
+    if (parsed.priority) setPriority(parsed.priority);
+    if (parsed.routineKey) {
+      setTriggerType("routine");
+      setRoutineKey(parsed.routineKey);
+    }
     setAutoApplied(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsed.time, parsed.recurrence, parsed.urgent, JSON.stringify(parsed.customDays)]);
+  }, [
+    parsed.time,
+    parsed.recurrence,
+    parsed.urgent,
+    parsed.priority,
+    parsed.routineKey,
+    JSON.stringify(parsed.customDays),
+  ]);
+
+  // Urgent toggle is only meaningful on high priority
+  useEffect(() => {
+    if (priority !== "high" && urgent) setUrgent(false);
+  }, [priority, urgent]);
 
   const reset = () => {
     setName("");
@@ -76,6 +107,10 @@ export function AddTaskDialog({
     setRecurrence("none");
     setCustomDays([]);
     setUrgent(false);
+    setPriority("medium");
+    setTriggerType("time");
+    setRoutineKey("lunch");
+    setCustomRoutine("");
     setAutoApplied(false);
     setDismissedDetection(false);
   };
@@ -85,12 +120,21 @@ export function AddTaskDialog({
     // Prefer the stripped name from the NLP parser when detection ran
     const finalName = (hasDetection && !dismissedDetection ? parsed.name : name).trim();
     if (!finalName || finalName.length > 120) return;
+    const isCustom = routineKey === "__custom";
+    const routineLabel = isCustom
+      ? customRoutine.trim()
+      : ROUTINES.find((r) => r.key === routineKey)?.label;
+    if (triggerType === "routine" && !routineLabel) return;
     onAdd({
       name: finalName,
       time,
       recurrence,
       customDays: recurrence === "custom" ? customDays : undefined,
       urgent,
+      priority,
+      trigger: triggerType,
+      routineKey: triggerType === "routine" ? (isCustom ? undefined : routineKey) : undefined,
+      routineLabel: triggerType === "routine" ? routineLabel : undefined,
     });
     reset();
     setOpen(false);
