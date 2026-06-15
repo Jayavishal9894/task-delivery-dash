@@ -230,9 +230,42 @@ export const useTaskStore = () => {
     const tick = () => {
       const now = Date.now();
       let changed = false;
+      // Auto-fire routine-triggered tasks whose routineTime has arrived
+      const fires = loadFires();
+      const nowD = new Date();
+      const hhmm = `${String(nowD.getHours()).padStart(2, "0")}:${String(nowD.getMinutes()).padStart(2, "0")}`;
+      const today = todayISO();
+      const toFire = new Map<string, { key?: string; label?: string; label2: string }>();
       setTasks((prev) => {
+        for (const t of prev) {
+          if (t.completedAt) continue;
+          if (t.trigger !== "routine") continue;
+          if (t.occurrenceDate !== today) continue;
+          if (!t.routineTime) continue;
+          if (t.routineTime > hhmm) continue;
+          const id = routineId({ key: t.routineKey, label: t.routineLabel });
+          if (!id || fires.fires[id] || toFire.has(id)) continue;
+          const label =
+            t.routineLabel ??
+            ROUTINES.find((r) => r.key === t.routineKey)?.label ??
+            "Routine";
+          toFire.set(id, { key: t.routineKey, label: t.routineLabel, label2: label });
+        }
         const next = prev.map((t) => {
           if (t.completedAt) return t;
+          // Apply auto-fire to matching routine tasks
+          if (t.trigger === "routine" && t.occurrenceDate === today) {
+            const id = routineId({ key: t.routineKey, label: t.routineLabel });
+            if (id && toFire.has(id)) {
+              changed = true;
+              return {
+                ...t,
+                startedAt: t.startedAt ?? new Date().toISOString(),
+                workingAt: new Date().toISOString(),
+                due: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+              };
+            }
+          }
           // Routine-based tasks don't auto-advance by time
           if (t.trigger === "routine") return t;
           const due = new Date(t.due).getTime();
@@ -275,6 +308,19 @@ export const useTaskStore = () => {
         if (changed) save(TASKS_KEY, next);
         return next;
       });
+      if (toFire.size) {
+        const updated: RoutineFires = {
+          date: today,
+          fires: { ...fires.fires },
+        };
+        const nowIso = new Date().toISOString();
+        for (const [id, info] of toFire) {
+          updated.fires[id] = nowIso;
+          notify("Trackit", `${info.label2} — time to check in`, { persistent: true });
+        }
+        saveFires(updated);
+        setRoutineFires(updated);
+      }
       force((x) => x + 1);
     };
     tick();
