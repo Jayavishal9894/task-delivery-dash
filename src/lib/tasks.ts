@@ -33,6 +33,24 @@ export const ROUTINES: RoutineDef[] = [
 export const routineByKey = (k?: string) =>
   k ? ROUTINES.find((r) => r.key === k) : undefined;
 
+// Default approximate trigger time for each predefined routine (HH:MM, 24h)
+export const DEFAULT_ROUTINE_TIMES: Record<string, string> = {
+  wake: "07:00",
+  teeth: "07:15",
+  breakfast: "08:30",
+  lunch: "13:00",
+  dinner: "20:00",
+  sleep: "23:00",
+  office_in: "09:30",
+  office_out: "18:30",
+};
+
+export const routineId = (m: { key?: string; label?: string }): string => {
+  if (m.key) return `k:${m.key}`;
+  if (m.label) return `l:${m.label.trim().toLowerCase()}`;
+  return "";
+};
+
 export type Task = {
   id: string;
   name: string;
@@ -48,6 +66,8 @@ export type Task = {
   // routine key (predefined) OR free-text custom label
   routineKey?: string;
   routineLabel?: string;
+  // For routine-triggered tasks: approximate time of day to auto-fire (HH:MM)
+  routineTime?: string;
   // ISO date (YYYY-MM-DD) for the occurrence this task represents
   occurrenceDate: string;
   createdAt?: string;
@@ -78,6 +98,21 @@ export type Template = {
 const TASKS_KEY = "trackit.tasks.v1";
 const TEMPLATES_KEY = "trackit.templates.v1";
 const STREAK_KEY = "trackit.streak.v1";
+const ROUTINE_FIRES_KEY = "trackit.routineFires.v1";
+
+type RoutineFires = { date: string; fires: Record<string, string> };
+const emptyFires = (): RoutineFires => ({ date: todayISO(), fires: {} });
+
+const loadFires = (): RoutineFires => {
+  const f = load<RoutineFires>(ROUTINE_FIRES_KEY, emptyFires());
+  if (f.date !== todayISO()) {
+    const fresh = emptyFires();
+    save(ROUTINE_FIRES_KEY, fresh);
+    return fresh;
+  }
+  return f;
+};
+const saveFires = (f: RoutineFires) => save(ROUTINE_FIRES_KEY, f);
 
 const notify = (
   title: string,
