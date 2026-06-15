@@ -33,6 +33,24 @@ export const ROUTINES: RoutineDef[] = [
 export const routineByKey = (k?: string) =>
   k ? ROUTINES.find((r) => r.key === k) : undefined;
 
+// Default approximate trigger time for each predefined routine (HH:MM, 24h)
+export const DEFAULT_ROUTINE_TIMES: Record<string, string> = {
+  wake: "07:00",
+  teeth: "07:15",
+  breakfast: "08:30",
+  lunch: "13:00",
+  dinner: "20:00",
+  sleep: "23:00",
+  office_in: "09:30",
+  office_out: "18:30",
+};
+
+export const routineId = (m: { key?: string; label?: string }): string => {
+  if (m.key) return `k:${m.key}`;
+  if (m.label) return `l:${m.label.trim().toLowerCase()}`;
+  return "";
+};
+
 export type Task = {
   id: string;
   name: string;
@@ -48,6 +66,8 @@ export type Task = {
   // routine key (predefined) OR free-text custom label
   routineKey?: string;
   routineLabel?: string;
+  // For routine-triggered tasks: approximate time of day to auto-fire (HH:MM)
+  routineTime?: string;
   // ISO date (YYYY-MM-DD) for the occurrence this task represents
   occurrenceDate: string;
   createdAt?: string;
@@ -78,6 +98,21 @@ export type Template = {
 const TASKS_KEY = "trackit.tasks.v1";
 const TEMPLATES_KEY = "trackit.templates.v1";
 const STREAK_KEY = "trackit.streak.v1";
+const ROUTINE_FIRES_KEY = "trackit.routineFires.v1";
+
+type RoutineFires = { date: string; fires: Record<string, string> };
+const emptyFires = (): RoutineFires => ({ date: todayISO(), fires: {} });
+
+const loadFires = (): RoutineFires => {
+  const f = load<RoutineFires>(ROUTINE_FIRES_KEY, emptyFires());
+  if (f.date !== todayISO()) {
+    const fresh = emptyFires();
+    save(ROUTINE_FIRES_KEY, fresh);
+    return fresh;
+  }
+  return f;
+};
+const saveFires = (f: RoutineFires) => save(ROUTINE_FIRES_KEY, f);
 
 const notify = (
   title: string,
@@ -169,6 +204,7 @@ const generateRecurringForToday = (templates: Template[], tasks: Task[]): Task[]
 export const useTaskStore = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [routineFires, setRoutineFires] = useState<RoutineFires>(emptyFires);
   const [, force] = useState(0);
 
   useEffect(() => {
@@ -185,6 +221,7 @@ export const useTaskStore = () => {
     if (generated.length) save(TASKS_KEY, merged);
     setTasks(merged);
     setTemplates(tmpls);
+    setRoutineFires(loadFires());
   }, []);
 
   // tick every 15s: re-evaluate overdue, auto-advance to "In Progress" 30 min
@@ -193,9 +230,42 @@ export const useTaskStore = () => {
     const tick = () => {
       const now = Date.now();
       let changed = false;
+      // Auto-fire routine-triggered tasks whose routineTime has arrived
+      const fires = loadFires();
+      const nowD = new Date();
+      const hhmm = `${String(nowD.getHours()).padStart(2, "0")}:${String(nowD.getMinutes()).padStart(2, "0")}`;
+      const today = todayISO();
+      const toFire = new Map<string, { key?: string; label?: string; label2: string }>();
       setTasks((prev) => {
+        for (const t of prev) {
+          if (t.completedAt) continue;
+          if (t.trigger !== "routine") continue;
+          if (t.occurrenceDate !== today) continue;
+          if (!t.routineTime) continue;
+          if (t.routineTime > hhmm) continue;
+          const id = routineId({ key: t.routineKey, label: t.routineLabel });
+          if (!id || fires.fires[id] || toFire.has(id)) continue;
+          const label =
+            t.routineLabel ??
+            ROUTINES.find((r) => r.key === t.routineKey)?.label ??
+            "Routine";
+          toFire.set(id, { key: t.routineKey, label: t.routineLabel, label2: label });
+        }
         const next = prev.map((t) => {
           if (t.completedAt) return t;
+          // Apply auto-fire to matching routine tasks
+          if (t.trigger === "routine" && t.occurrenceDate === today) {
+            const id = routineId({ key: t.routineKey, label: t.routineLabel });
+            if (id && toFire.has(id)) {
+              changed = true;
+              return {
+                ...t,
+                startedAt: t.startedAt ?? new Date().toISOString(),
+                workingAt: new Date().toISOString(),
+                due: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+              };
+            }
+          }
           // Routine-based tasks don't auto-advance by time
           if (t.trigger === "routine") return t;
           const due = new Date(t.due).getTime();
@@ -238,6 +308,19 @@ export const useTaskStore = () => {
         if (changed) save(TASKS_KEY, next);
         return next;
       });
+      if (toFire.size) {
+        const updated: RoutineFires = {
+          date: today,
+          fires: { ...fires.fires },
+        };
+        const nowIso = new Date().toISOString();
+        for (const [id, info] of toFire) {
+          updated.fires[id] = nowIso;
+          notify("Trackit", `${info.label2} — time to check in`, { persistent: true });
+        }
+        saveFires(updated);
+        setRoutineFires(updated);
+      }
       force((x) => x + 1);
     };
     tick();
@@ -253,6 +336,10 @@ export const useTaskStore = () => {
     setTemplates(next);
     save(TEMPLATES_KEY, next);
   };
+  const persistFires = (next: RoutineFires) => {
+    setRoutineFires(next);
+    saveFires(next);
+  };
 
   const addTask = useCallback(
     (input: {
@@ -265,6 +352,7 @@ export const useTaskStore = () => {
       trigger?: TriggerType;
       routineKey?: string;
       routineLabel?: string;
+      routineTime?: string;
     }) => {
       const trigger = input.trigger ?? "time";
       const priority: Priority =
@@ -304,6 +392,11 @@ export const useTaskStore = () => {
         trigger,
         routineKey: trigger === "routine" ? input.routineKey : undefined,
         routineLabel: trigger === "routine" ? input.routineLabel : undefined,
+        routineTime:
+          trigger === "routine"
+            ? input.routineTime ??
+              (input.routineKey ? DEFAULT_ROUTINE_TIMES[input.routineKey] : undefined)
+            : undefined,
         occurrenceDate: todayISO(),
         templateId,
         createdAt: new Date().toISOString(),
@@ -377,7 +470,11 @@ export const useTaskStore = () => {
   // Fire a routine — moves all matching incomplete routine tasks into the
   // "In Progress" stage so the user sees them as immediate nudges.
   const fireRoutine = useCallback(
-    (matcher: { key?: string; label?: string }) => {
+    (matcher: { key?: string; label?: string }, opts: { silent?: boolean } = {}) => {
+      const id = routineId(matcher);
+      if (!id) return 0;
+      const fires = loadFires();
+      if (fires.fires[id]) return 0; // already checked in today
       const now = new Date().toISOString();
       const today = todayISO();
       let count = 0;
@@ -400,6 +497,17 @@ export const useTaskStore = () => {
         };
       });
       persistTasks(next);
+      const updatedFires = { ...fires, fires: { ...fires.fires, [id]: now } };
+      persistFires(updatedFires);
+      if (count > 0 && !opts.silent) {
+        const label =
+          matcher.label ??
+          (matcher.key ? ROUTINES.find((r) => r.key === matcher.key)?.label : undefined) ??
+          "Routine";
+        notify("Trackit", `${label} — ${count} task${count === 1 ? "" : "s"} ready`, {
+          persistent: true,
+        });
+      }
       return count;
     },
     [tasks],
@@ -414,6 +522,7 @@ export const useTaskStore = () => {
     completeTask,
     removeTask,
     fireRoutine,
+    routineFires: routineFires.fires,
   };
 };
 

@@ -11,11 +11,19 @@ import { TaskCard } from "@/components/TaskCard";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { UrgentOverlay } from "@/components/UrgentOverlay";
 import { SettingsDialog } from "@/components/SettingsDialog";
-import { useTaskStore, getStreak, todayISO, taskStage, ROUTINES } from "@/lib/tasks";
+import { useTaskStore, getStreak, todayISO, taskStage, ROUTINES, routineId } from "@/lib/tasks";
 
 const ROUTINE_ICONS = {
   Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
 } as const;
+
+function formatHM(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (isNaN(h)) return hhmm;
+  const period = h < 12 ? "AM" : "PM";
+  const hr = ((h + 11) % 12) + 1;
+  return `${hr}:${String(m).padStart(2, "0")} ${period}`;
+}
 
 export const Route = createFileRoute("/app")({
   head: () => ({
@@ -28,7 +36,7 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppPage() {
-  const { tasks, addTask, startTask, completeTask, removeTask, updateTask, fireRoutine } =
+  const { tasks, addTask, startTask, completeTask, removeTask, updateTask, fireRoutine, routineFires } =
     useTaskStore();
   const [streak, setStreak] = useState(0);
   const [online, setOnline] = useState(true);
@@ -52,15 +60,37 @@ function AppPage() {
     [tasks, today],
   );
 
-  // Routines that have at least one pending task attached today
-  const activeRoutines = useMemo(() => {
-    const counts = new Map<string, number>();
+  // Routines attached to today's tasks. Includes fired ones so we can show
+  // "Already checked in at HH:MM" state.
+  const todaysRoutines = useMemo(() => {
+    const m = new Map<
+      string,
+      { id: string; key?: string; label: string; pending: number; total: number; time?: string }
+    >();
     for (const t of todays) {
-      if (t.trigger !== "routine" || t.completedAt || t.workingAt) continue;
-      const k = t.routineKey ?? `custom:${t.routineLabel ?? ""}`;
-      counts.set(k, (counts.get(k) ?? 0) + 1);
+      if (t.trigger !== "routine") continue;
+      const id = routineId({ key: t.routineKey, label: t.routineLabel });
+      if (!id) continue;
+      const label =
+        ROUTINES.find((r) => r.key === t.routineKey)?.label ??
+        t.routineLabel ??
+        "Routine";
+      const prev = m.get(id);
+      if (prev) {
+        prev.total++;
+        if (!t.completedAt && !t.workingAt) prev.pending++;
+      } else {
+        m.set(id, {
+          id,
+          key: t.routineKey,
+          label,
+          pending: t.completedAt || t.workingAt ? 0 : 1,
+          total: 1,
+          time: t.routineTime,
+        });
+      }
     }
-    return [...counts.entries()].map(([k, n]) => ({ k, n }));
+    return [...m.values()];
   }, [todays]);
   const done = todays.filter((t) => taskStage(t) === 3).length;
   const total = todays.length;
@@ -101,35 +131,59 @@ function AppPage() {
       </header>
 
       <main className="max-w-xl mx-auto px-4 pt-5">
-        {activeRoutines.length > 0 && (
+        {todaysRoutines.length > 0 && (
           <div className="mb-4">
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-              Routine anchors
+              Routine check-in
             </h2>
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              {activeRoutines.map(({ k, n }) => {
-                const isCustom = k.startsWith("custom:");
-                const def = !isCustom ? ROUTINES.find((r) => r.key === k) : undefined;
-                const Icon = def ? ROUTINE_ICONS[def.icon as keyof typeof ROUTINE_ICONS] : Sparkles;
-                const label = def?.label ?? k.replace(/^custom:/, "") ?? "Routine";
+              {todaysRoutines.map((r) => {
+                const def = r.key ? ROUTINES.find((x) => x.key === r.key) : undefined;
+                const Icon = def
+                  ? ROUTINE_ICONS[def.icon as keyof typeof ROUTINE_ICONS]
+                  : Sparkles;
+                const firedAt = routineFires[r.id];
+                const short = r.label.replace(/^After |^Before /, "");
+                if (firedAt) {
+                  const t = new Date(firedAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex items-center gap-1.5 whitespace-nowrap rounded-full border bg-muted/60 text-muted-foreground px-3 py-1.5 text-sm font-medium"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{short}</span>
+                      <span className="ml-1 text-xs">checked in {t}</span>
+                    </div>
+                  );
+                }
                 return (
                   <button
-                    key={k}
+                    key={r.id}
                     type="button"
                     onClick={() => {
-                      const count = isCustom
-                        ? fireRoutine({ label: k.replace(/^custom:/, "") })
-                        : fireRoutine({ key: k });
-                      toast.success(
-                        `Done · ${label}`,
-                        { description: `${count} task${count === 1 ? "" : "s"} nudged` },
-                      );
+                      const count = r.key
+                        ? fireRoutine({ key: r.key })
+                        : fireRoutine({ label: r.label });
+                      toast.success(`Done · ${r.label}`, {
+                        description: `${count} task${count === 1 ? "" : "s"} nudged`,
+                      });
                     }}
                     className="flex items-center gap-1.5 whitespace-nowrap rounded-full border bg-card px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted/50"
                   >
                     <Icon className="h-3.5 w-3.5 text-primary" />
-                    Done · {label.replace(/^After |^Before /, "")}
-                    <span className="ml-1 text-xs text-muted-foreground">{n}</span>
+                    Done · {short}
+                    {r.time && (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        ~{formatHM(r.time)}
+                      </span>
+                    )}
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      {r.pending}
+                    </span>
                   </button>
                 );
               })}
