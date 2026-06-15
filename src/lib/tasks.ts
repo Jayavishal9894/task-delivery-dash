@@ -522,6 +522,7 @@ export const useTaskStore = () => {
     completeTask,
     removeTask,
     fireRoutine,
+    routineFires: routineFires.fires,
   };
 };
 
