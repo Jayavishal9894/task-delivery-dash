@@ -185,3 +185,38 @@
   animation: line-fill 0.7s ease-out forwards;
   width: 100%;
 }
+
+/* Celebration overlay */
+@keyframes confetti-fall {
+  0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0.9; }
+}
+@keyframes draw-circle {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes draw-check {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes pop-in {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes burst-ring {
+  0% { transform: scale(0.2); opacity: 0.7; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes particle-burst {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% {
+    transform: translate(
+      calc(cos(var(--angle)) * 120px),
+      calc(sin(var(--angle)) * 120px)
+    ) scale(0.3);
+    opacity: 0;
+  }
+}
