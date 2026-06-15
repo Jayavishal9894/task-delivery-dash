@@ -25,7 +25,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { Recurrence, Priority, TriggerType } from "@/lib/tasks";
-import { ROUTINES } from "@/lib/tasks";
+import { ROUTINES, DEFAULT_ROUTINE_TIMES } from "@/lib/tasks";
 import { parseTaskInput, describeParsed } from "@/lib/nlp";
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -45,6 +45,7 @@ export function AddTaskDialog({
     trigger: TriggerType;
     routineKey?: string;
     routineLabel?: string;
+    routineTime?: string;
   }) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -59,6 +60,9 @@ export function AddTaskDialog({
   const [triggerType, setTriggerType] = useState<TriggerType>("time");
   const [routineKey, setRoutineKey] = useState<string>("lunch");
   const [customRoutine, setCustomRoutine] = useState("");
+  const [routineTime, setRoutineTime] = useState<string>(
+    DEFAULT_ROUTINE_TIMES["lunch"] ?? "13:00",
+  );
   const [autoApplied, setAutoApplied] = useState(false);
   const [dismissedDetection, setDismissedDetection] = useState(false);
 
@@ -84,6 +88,8 @@ export function AddTaskDialog({
     if (parsed.routineKey) {
       setTriggerType("routine");
       setRoutineKey(parsed.routineKey);
+      const dt = DEFAULT_ROUTINE_TIMES[parsed.routineKey];
+      if (dt) setRoutineTime(dt);
     }
     setAutoApplied(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,6 +117,7 @@ export function AddTaskDialog({
     setTriggerType("time");
     setRoutineKey("lunch");
     setCustomRoutine("");
+    setRoutineTime(DEFAULT_ROUTINE_TIMES["lunch"] ?? "13:00");
     setAutoApplied(false);
     setDismissedDetection(false);
   };
@@ -135,6 +142,7 @@ export function AddTaskDialog({
       trigger: triggerType,
       routineKey: triggerType === "routine" ? (isCustom ? undefined : routineKey) : undefined,
       routineLabel: triggerType === "routine" ? routineLabel : undefined,
+      routineTime: triggerType === "routine" ? routineTime : undefined,
     });
     reset();
     setOpen(false);
