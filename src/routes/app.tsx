@@ -17,6 +17,14 @@ const ROUTINE_ICONS = {
   Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
 } as const;
 
+function formatHM(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (isNaN(h)) return hhmm;
+  const period = h < 12 ? "AM" : "PM";
+  const hr = ((h + 11) % 12) + 1;
+  return `${hr}:${String(m).padStart(2, "0")} ${period}`;
+}
+
 export const Route = createFileRoute("/app")({
   head: () => ({
     meta: [
