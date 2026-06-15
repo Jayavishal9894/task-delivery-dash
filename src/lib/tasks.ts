@@ -424,7 +424,11 @@ export const useTaskStore = () => {
   // Fire a routine — moves all matching incomplete routine tasks into the
   // "In Progress" stage so the user sees them as immediate nudges.
   const fireRoutine = useCallback(
-    (matcher: { key?: string; label?: string }) => {
+    (matcher: { key?: string; label?: string }, opts: { silent?: boolean } = {}) => {
+      const id = routineId(matcher);
+      if (!id) return 0;
+      const fires = loadFires();
+      if (fires.fires[id]) return 0; // already checked in today
       const now = new Date().toISOString();
       const today = todayISO();
       let count = 0;
@@ -447,6 +451,17 @@ export const useTaskStore = () => {
         };
       });
       persistTasks(next);
+      const updatedFires = { ...fires, fires: { ...fires.fires, [id]: now } };
+      persistFires(updatedFires);
+      if (count > 0 && !opts.silent) {
+        const label =
+          matcher.label ??
+          (matcher.key ? ROUTINES.find((r) => r.key === matcher.key)?.label : undefined) ??
+          "Routine";
+        notify("Trackit", `${label} — ${count} task${count === 1 ? "" : "s"} ready`, {
+          persistent: true,
+        });
+      }
       return count;
     },
     [tasks],
