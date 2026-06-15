@@ -204,6 +204,7 @@ const generateRecurringForToday = (templates: Template[], tasks: Task[]): Task[]
 export const useTaskStore = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [routineFires, setRoutineFires] = useState<RoutineFires>(emptyFires);
   const [, force] = useState(0);
 
   useEffect(() => {
@@ -220,6 +221,7 @@ export const useTaskStore = () => {
     if (generated.length) save(TASKS_KEY, merged);
     setTasks(merged);
     setTemplates(tmpls);
+    setRoutineFires(loadFires());
   }, []);
 
   // tick every 15s: re-evaluate overdue, auto-advance to "In Progress" 30 min
@@ -288,6 +290,10 @@ export const useTaskStore = () => {
     setTemplates(next);
     save(TEMPLATES_KEY, next);
   };
+  const persistFires = (next: RoutineFires) => {
+    setRoutineFires(next);
+    saveFires(next);
+  };
 
   const addTask = useCallback(
     (input: {
@@ -300,6 +306,7 @@ export const useTaskStore = () => {
       trigger?: TriggerType;
       routineKey?: string;
       routineLabel?: string;
+      routineTime?: string;
     }) => {
       const trigger = input.trigger ?? "time";
       const priority: Priority =
@@ -339,6 +346,11 @@ export const useTaskStore = () => {
         trigger,
         routineKey: trigger === "routine" ? input.routineKey : undefined,
         routineLabel: trigger === "routine" ? input.routineLabel : undefined,
+        routineTime:
+          trigger === "routine"
+            ? input.routineTime ??
+              (input.routineKey ? DEFAULT_ROUTINE_TIMES[input.routineKey] : undefined)
+            : undefined,
         occurrenceDate: todayISO(),
         templateId,
         createdAt: new Date().toISOString(),
