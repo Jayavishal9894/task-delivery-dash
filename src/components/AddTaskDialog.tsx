@@ -233,7 +233,14 @@ export function AddTaskDialog({
           ) : (
             <div className="space-y-2">
               <Label>Routine anchor</Label>
-              <Select value={routineKey} onValueChange={setRoutineKey}>
+              <Select
+                value={routineKey}
+                onValueChange={(v) => {
+                  setRoutineKey(v);
+                  const dt = DEFAULT_ROUTINE_TIMES[v];
+                  if (dt) setRoutineTime(dt);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -254,13 +261,21 @@ export function AddTaskDialog({
                   maxLength={60}
                 />
               )}
-              <p className="text-xs text-muted-foreground">
-                We'll remind you when you mark "
-                {routineKey === "__custom"
-                  ? (customRoutine.trim() || "your routine")
-                  : ROUTINES.find((r) => r.key === routineKey)?.label}
-                " as done.
-              </p>
+              <div className="space-y-1.5 pt-1">
+                <Label htmlFor="routine-time" className="text-sm">
+                  What time do you usually do this routine?
+                </Label>
+                <Input
+                  id="routine-time"
+                  type="time"
+                  value={routineTime}
+                  onChange={(e) => setRoutineTime(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  We'll auto-nudge you at this time, or tap the routine on your home
+                  screen to check in early.
+                </p>
+              </div>
             </div>
           )}
 
