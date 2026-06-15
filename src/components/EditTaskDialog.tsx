@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   ROUTINES,
+  DEFAULT_ROUTINE_TIMES,
   type Priority,
   type Recurrence,
   type Task,
@@ -62,6 +63,11 @@ export function EditTaskDialog({
   const [customRoutine, setCustomRoutine] = useState(
     !task.routineKey && task.routineLabel ? task.routineLabel : "",
   );
+  const [routineTime, setRoutineTime] = useState<string>(
+    task.routineTime ??
+      (task.routineKey ? DEFAULT_ROUTINE_TIMES[task.routineKey] : undefined) ??
+      "13:00",
+  );
 
   // Reset to task values whenever it (re)opens
   useEffect(() => {
@@ -75,6 +81,11 @@ export function EditTaskDialog({
     setTriggerType(task.trigger);
     setRoutineKey(task.routineKey ?? (task.routineLabel ? "__custom" : "lunch"));
     setCustomRoutine(!task.routineKey && task.routineLabel ? task.routineLabel : "");
+    setRoutineTime(
+      task.routineTime ??
+        (task.routineKey ? DEFAULT_ROUTINE_TIMES[task.routineKey] : undefined) ??
+        "13:00",
+    );
   }, [open, task]);
 
   useEffect(() => {
@@ -110,6 +121,7 @@ export function EditTaskDialog({
       if (!label) return;
       patch.routineKey = isCustom ? undefined : routineKey;
       patch.routineLabel = label;
+      patch.routineTime = routineTime;
     }
 
     onSave(patch);
@@ -184,7 +196,14 @@ export function EditTaskDialog({
           ) : (
             <div className="space-y-2">
               <Label>Routine anchor</Label>
-              <Select value={routineKey} onValueChange={setRoutineKey}>
+              <Select
+                value={routineKey}
+                onValueChange={(v) => {
+                  setRoutineKey(v);
+                  const dt = DEFAULT_ROUTINE_TIMES[v];
+                  if (dt) setRoutineTime(dt);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -205,6 +224,17 @@ export function EditTaskDialog({
                   maxLength={60}
                 />
               )}
+              <div className="space-y-1.5 pt-1">
+                <Label htmlFor="edit-routine-time" className="text-sm">
+                  What time do you usually do this routine?
+                </Label>
+                <Input
+                  id="edit-routine-time"
+                  type="time"
+                  value={routineTime}
+                  onChange={(e) => setRoutineTime(e.target.value)}
+                />
+              </div>
             </div>
           )}
 
