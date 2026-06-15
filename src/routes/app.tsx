@@ -11,7 +11,7 @@ import { TaskCard } from "@/components/TaskCard";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { UrgentOverlay } from "@/components/UrgentOverlay";
 import { SettingsDialog } from "@/components/SettingsDialog";
-import { useTaskStore, getStreak, todayISO, taskStage, ROUTINES } from "@/lib/tasks";
+import { useTaskStore, getStreak, todayISO, taskStage, ROUTINES, routineId } from "@/lib/tasks";
 
 const ROUTINE_ICONS = {
   Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
@@ -28,7 +28,7 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppPage() {
-  const { tasks, addTask, startTask, completeTask, removeTask, updateTask, fireRoutine } =
+  const { tasks, addTask, startTask, completeTask, removeTask, updateTask, fireRoutine, routineFires } =
     useTaskStore();
   const [streak, setStreak] = useState(0);
   const [online, setOnline] = useState(true);
@@ -52,15 +52,37 @@ function AppPage() {
     [tasks, today],
   );
 
-  // Routines that have at least one pending task attached today
-  const activeRoutines = useMemo(() => {
-    const counts = new Map<string, number>();
+  // Routines attached to today's tasks. Includes fired ones so we can show
+  // "Already checked in at HH:MM" state.
+  const todaysRoutines = useMemo(() => {
+    const m = new Map<
+      string,
+      { id: string; key?: string; label: string; pending: number; total: number; time?: string }
+    >();
     for (const t of todays) {
-      if (t.trigger !== "routine" || t.completedAt || t.workingAt) continue;
-      const k = t.routineKey ?? `custom:${t.routineLabel ?? ""}`;
-      counts.set(k, (counts.get(k) ?? 0) + 1);
+      if (t.trigger !== "routine") continue;
+      const id = routineId({ key: t.routineKey, label: t.routineLabel });
+      if (!id) continue;
+      const label =
+        ROUTINES.find((r) => r.key === t.routineKey)?.label ??
+        t.routineLabel ??
+        "Routine";
+      const prev = m.get(id);
+      if (prev) {
+        prev.total++;
+        if (!t.completedAt && !t.workingAt) prev.pending++;
+      } else {
+        m.set(id, {
+          id,
+          key: t.routineKey,
+          label,
+          pending: t.completedAt || t.workingAt ? 0 : 1,
+          total: 1,
+          time: t.routineTime,
+        });
+      }
     }
-    return [...counts.entries()].map(([k, n]) => ({ k, n }));
+    return [...m.values()];
   }, [todays]);
   const done = todays.filter((t) => taskStage(t) === 3).length;
   const total = todays.length;
