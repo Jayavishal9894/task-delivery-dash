@@ -165,6 +165,7 @@ function AppPage() {
                 onStart={() => startTask(t.id)}
                 onComplete={() => completeTask(t.id)}
                 onDelete={() => removeTask(t.id)}
+                onUpdate={(patch) => updateTask(t.id, patch)}
                 onSnooze={() =>
                   updateTask(t.id, {
                     due: new Date(
