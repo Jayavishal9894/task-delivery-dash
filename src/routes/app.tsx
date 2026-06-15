@@ -123,35 +123,59 @@ function AppPage() {
       </header>
 
       <main className="max-w-xl mx-auto px-4 pt-5">
-        {activeRoutines.length > 0 && (
+        {todaysRoutines.length > 0 && (
           <div className="mb-4">
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-              Routine anchors
+              Routine check-in
             </h2>
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              {activeRoutines.map(({ k, n }) => {
-                const isCustom = k.startsWith("custom:");
-                const def = !isCustom ? ROUTINES.find((r) => r.key === k) : undefined;
-                const Icon = def ? ROUTINE_ICONS[def.icon as keyof typeof ROUTINE_ICONS] : Sparkles;
-                const label = def?.label ?? k.replace(/^custom:/, "") ?? "Routine";
+              {todaysRoutines.map((r) => {
+                const def = r.key ? ROUTINES.find((x) => x.key === r.key) : undefined;
+                const Icon = def
+                  ? ROUTINE_ICONS[def.icon as keyof typeof ROUTINE_ICONS]
+                  : Sparkles;
+                const firedAt = routineFires[r.id];
+                const short = r.label.replace(/^After |^Before /, "");
+                if (firedAt) {
+                  const t = new Date(firedAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex items-center gap-1.5 whitespace-nowrap rounded-full border bg-muted/60 text-muted-foreground px-3 py-1.5 text-sm font-medium"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{short}</span>
+                      <span className="ml-1 text-xs">checked in {t}</span>
+                    </div>
+                  );
+                }
                 return (
                   <button
-                    key={k}
+                    key={r.id}
                     type="button"
                     onClick={() => {
-                      const count = isCustom
-                        ? fireRoutine({ label: k.replace(/^custom:/, "") })
-                        : fireRoutine({ key: k });
-                      toast.success(
-                        `Done · ${label}`,
-                        { description: `${count} task${count === 1 ? "" : "s"} nudged` },
-                      );
+                      const count = r.key
+                        ? fireRoutine({ key: r.key })
+                        : fireRoutine({ label: r.label });
+                      toast.success(`Done · ${r.label}`, {
+                        description: `${count} task${count === 1 ? "" : "s"} nudged`,
+                      });
                     }}
                     className="flex items-center gap-1.5 whitespace-nowrap rounded-full border bg-card px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted/50"
                   >
                     <Icon className="h-3.5 w-3.5 text-primary" />
-                    Done · {label.replace(/^After |^Before /, "")}
-                    <span className="ml-1 text-xs text-muted-foreground">{n}</span>
+                    Done · {short}
+                    {r.time && (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        ~{formatHM(r.time)}
+                      </span>
+                    )}
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      {r.pending}
+                    </span>
                   </button>
                 );
               })}
