@@ -4,6 +4,8 @@ import {
   Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star,
 } from "lucide-react";
 import { DeliveryTracker } from "./DeliveryTracker";
+import { EditTaskDialog } from "./EditTaskDialog";
+import { CelebrationOverlay } from "./CelebrationOverlay";
 import { Button } from "@/components/ui/button";
 import {
   Task,
@@ -25,17 +27,20 @@ export function TaskCard({
   onComplete,
   onDelete,
   onSnooze,
+  onUpdate,
 }: {
   task: Task;
   onStart: () => void;
   onComplete: () => void;
   onDelete: () => void;
   onSnooze: () => void;
+  onUpdate: (patch: Partial<Task>) => void;
 }) {
   const stage = taskStage(task);
   const overdue = isOverdue(task);
   const done = stage === 3;
   const [celebrate, setCelebrate] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [, tick] = useState(0);
 
   useEffect(() => {
@@ -43,17 +48,6 @@ export function TaskCard({
     const i = setInterval(() => tick((x) => x + 1), 15000);
     return () => clearInterval(i);
   }, [done]);
-
-  useEffect(() => {
-    if (done && task.completedAt) {
-      const age = Date.now() - new Date(task.completedAt).getTime();
-      if (age < 3000) {
-        setCelebrate(true);
-        const t = setTimeout(() => setCelebrate(false), 2000);
-        return () => clearTimeout(t);
-      }
-    }
-  }, [done, task.completedAt]);
 
   const pct = progressPercent(task);
   const justAdded =
@@ -79,6 +73,11 @@ export function TaskCard({
     }
   };
 
+  const handleComplete = () => {
+    setCelebrate(true);
+    onComplete();
+  };
+
   return (
     <div
       className={cn(
@@ -88,13 +87,18 @@ export function TaskCard({
       )}
     >
       {celebrate && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-primary/95 text-primary-foreground z-10 animate-fade-in">
-          <div className="text-center">
-            <div className="text-3xl mb-1">🎉</div>
-            <div className="font-bold">Task Delivered!</div>
-          </div>
-        </div>
+        <CelebrationOverlay
+          taskName={task.name}
+          completedAt={task.completedAt ? new Date(task.completedAt) : new Date()}
+          onDismiss={() => setCelebrate(false)}
+        />
       )}
+      <EditTaskDialog
+        task={task}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSave={onUpdate}
+      />
 
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
@@ -179,7 +183,7 @@ export function TaskCard({
             </Button>
             <Button
               className="flex-1 h-11 rounded-xl bg-slate-900 hover:bg-slate-800 text-white"
-              onClick={onComplete}
+              onClick={handleComplete}
             >
               <Check className="h-4 w-4 mr-1" strokeWidth={3} /> Mark as Done
             </Button>
@@ -187,7 +191,7 @@ export function TaskCard({
           <div className="flex gap-2">
             <Button
               className="flex-1 h-11 rounded-xl bg-black hover:bg-black/90 text-white"
-              onClick={onDelete}
+              onClick={() => setEditOpen(true)}
             >
               <Pencil className="h-4 w-4 mr-1" /> Edit
             </Button>
