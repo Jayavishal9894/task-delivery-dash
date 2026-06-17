@@ -241,6 +241,7 @@ export const useTaskStore = () => {
       setTasks((prev) => {
         for (const t of prev) {
           if (t.completedAt) continue;
+        if (t.deletedAt) continue;
           if (t.trigger !== "routine") continue;
           if (t.occurrenceDate !== today) continue;
           if (!t.routineTime) continue;
@@ -254,6 +255,7 @@ export const useTaskStore = () => {
           toFire.set(id, { key: t.routineKey, label: t.routineLabel, label2: label });
         }
         const next = prev.map((t) => {
+          if (t.deletedAt) return t;
           if (t.completedAt) return t;
           // Apply auto-fire to matching routine tasks
           if (t.trigger === "routine" && t.occurrenceDate === today) {
@@ -466,7 +468,22 @@ export const useTaskStore = () => {
   };
 
   const removeTask = (id: string) => {
+    const now = new Date().toISOString();
+    persistTasks(
+      tasks.map((t) => (t.id === id ? { ...t, deletedAt: now } : t)),
+    );
+  };
+
+  // Hard-delete (used by auto-purge or manual "Forever delete")
+  const purgeTask = (id: string) => {
     persistTasks(tasks.filter((t) => t.id !== id));
+  };
+
+  // Undo soft delete
+  const restoreTask = (id: string) => {
+    persistTasks(
+      tasks.map((t) => (t.id === id ? { ...t, deletedAt: undefined } : t)),
+    );
   };
 
   // Fire a routine — moves all matching incomplete routine tasks into the
@@ -523,6 +540,8 @@ export const useTaskStore = () => {
     startTask,
     completeTask,
     removeTask,
+    purgeTask,
+    restoreTask,
     fireRoutine,
     routineFires: routineFires.fires,
   };
