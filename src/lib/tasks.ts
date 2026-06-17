@@ -81,6 +81,8 @@ export type Task = {
   notified30?: boolean;
   notified10?: boolean;
   notifiedDue?: boolean;
+  // Soft delete — moved to History "Deleted" section
+  deletedAt?: string;
 };
 
 export type Template = {
