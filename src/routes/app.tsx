@@ -78,7 +78,10 @@ function AppPage() {
   useEffect(() => {
     setStreak(getStreak());
     setOnline(navigator.onLine);
-    const on = () => setOnline(true);
+    const on = () => {
+      setOnline(true);
+      toast.success("Back online — all changes saved locally");
+    };
     const off = () => setOnline(false);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
@@ -140,6 +143,13 @@ function AppPage() {
   return (
     <div className="min-h-screen bg-muted/30 pb-36">
       <UrgentOverlay tasks={todays} onComplete={completeTask} />
+
+      {!online && (
+        <div className="sticky top-0 z-20 bg-amber-500 text-white text-xs font-medium text-center py-1.5 px-3 flex items-center justify-center gap-2">
+          <WifiOff className="h-3.5 w-3.5" />
+          You're offline — changes are saved on this device and will be there when you're back
+        </div>
+      )}
 
       <header className="bg-card border-b sticky top-0 z-10">
         <div className="max-w-xl mx-auto px-4 py-4 flex items-center justify-between">
