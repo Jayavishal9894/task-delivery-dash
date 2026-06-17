@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
 import {
-  Flame, Package, Plus, WifiOff,
+  Flame, Package, Plus, WifiOff, Home, History as HistoryIcon,
   Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -11,7 +11,10 @@ import { TaskCard } from "@/components/TaskCard";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { UrgentOverlay } from "@/components/UrgentOverlay";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { HistoryView } from "@/components/HistoryView";
 import { useTaskStore, getStreak, todayISO, taskStage, ROUTINES, routineId } from "@/lib/tasks";
+import type { Task, Recurrence, Priority, TriggerType } from "@/lib/tasks";
+import { cn } from "@/lib/utils";
 
 const ROUTINE_ICONS = {
   Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
@@ -36,10 +39,41 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppPage() {
-  const { tasks, addTask, startTask, completeTask, removeTask, updateTask, fireRoutine, routineFires } =
+  const { tasks, addTask, startTask, completeTask, removeTask, restoreTask, purgeTask, updateTask, fireRoutine, routineFires } =
     useTaskStore();
   const [streak, setStreak] = useState(0);
   const [online, setOnline] = useState(true);
+  const [tab, setTab] = useState<"home" | "history">("home");
+  const [redeliverInit, setRedeliverInit] = useState<{
+    name: string;
+    time: string;
+    recurrence: Recurrence;
+    customDays?: number[];
+    urgent: boolean;
+    priority: Priority;
+    trigger: TriggerType;
+    routineKey?: string;
+    routineLabel?: string;
+    routineTime?: string;
+  } | null>(null);
+
+  const handleRedeliver = (t: Task) => {
+    const due = new Date(t.due);
+    const hh = String(due.getHours()).padStart(2, "0");
+    const mm = String(due.getMinutes()).padStart(2, "0");
+    setRedeliverInit({
+      name: t.name,
+      time: `${hh}:${mm}`,
+      recurrence: t.recurrence,
+      customDays: t.customDays,
+      urgent: t.urgent,
+      priority: t.priority,
+      trigger: t.trigger,
+      routineKey: t.routineKey,
+      routineLabel: t.routineLabel,
+      routineTime: t.routineTime,
+    });
+  };
 
   useEffect(() => {
     setStreak(getStreak());
@@ -56,7 +90,7 @@ function AppPage() {
 
   const today = todayISO();
   const todays = useMemo(
-    () => tasks.filter((t) => t.occurrenceDate === today),
+    () => tasks.filter((t) => t.occurrenceDate === today && !t.deletedAt),
     [tasks, today],
   );
 
@@ -104,7 +138,7 @@ function AppPage() {
   });
 
   return (
-    <div className="min-h-screen bg-muted/30 pb-32">
+    <div className="min-h-screen bg-muted/30 pb-36">
       <UrgentOverlay tasks={todays} onComplete={completeTask} />
 
       <header className="bg-card border-b sticky top-0 z-10">
@@ -131,6 +165,15 @@ function AppPage() {
       </header>
 
       <main className="max-w-xl mx-auto px-4 pt-5">
+        {tab === "history" ? (
+          <HistoryView
+            tasks={tasks}
+            onRedeliver={handleRedeliver}
+            onRestore={restoreTask}
+            onPurge={purgeTask}
+          />
+        ) : (
+          <>
         {todaysRoutines.length > 0 && (
           <div className="mb-4">
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
@@ -232,23 +275,89 @@ function AppPage() {
             ))}
           </div>
         )}
+          </>
+        )}
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background to-transparent pointer-events-none">
-        <div className="max-w-xl mx-auto pointer-events-auto">
-          <AddTaskDialog
-            onAdd={addTask}
-            trigger={
-              <Button
-                size="lg"
-                className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl shadow-lg text-base font-semibold"
-              >
-                <Plus className="h-5 w-5 mr-1" /> Add new task
-              </Button>
-            }
-          />
-        </div>
+      {/* Floating Add button + Bottom nav */}
+      <div className="fixed bottom-0 left-0 right-0 pointer-events-none">
+        {tab === "home" && (
+          <div className="px-4 pb-2 bg-gradient-to-t from-background via-background to-transparent">
+            <div className="max-w-xl mx-auto pointer-events-auto">
+              <AddTaskDialog
+                onAdd={addTask}
+                trigger={
+                  <Button
+                    size="lg"
+                    className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl shadow-lg text-base font-semibold"
+                  >
+                    <Plus className="h-5 w-5 mr-1" /> Add new task
+                  </Button>
+                }
+              />
+            </div>
+          </div>
+        )}
+        <nav className="pointer-events-auto bg-card border-t">
+          <div className="max-w-xl mx-auto grid grid-cols-2">
+            <NavTab
+              label="Home"
+              Icon={Home}
+              active={tab === "home"}
+              onClick={() => setTab("home")}
+            />
+            <NavTab
+              label="History"
+              Icon={HistoryIcon}
+              active={tab === "history"}
+              onClick={() => setTab("history")}
+            />
+          </div>
+        </nav>
       </div>
+
+      {/* Redeliver dialog — controlled, opens with pre-filled values */}
+      {redeliverInit && (
+        <AddTaskDialog
+          open
+          onOpenChange={(v) => {
+            if (!v) setRedeliverInit(null);
+          }}
+          initialValues={redeliverInit}
+          onAdd={(input) => {
+            addTask(input);
+            setRedeliverInit(null);
+            setTab("home");
+            toast.success("Redelivered", { description: input.name });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function NavTab({
+  label,
+  Icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition-colors",
+        active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      <Icon className="h-5 w-5" />
+      {label}
+    </button>
   );
 }

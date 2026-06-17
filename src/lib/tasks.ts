@@ -81,6 +81,8 @@ export type Task = {
   notified30?: boolean;
   notified10?: boolean;
   notifiedDue?: boolean;
+  // Soft delete — moved to History "Deleted" section
+  deletedAt?: string;
 };
 
 export type Template = {
@@ -210,15 +212,20 @@ export const useTaskStore = () => {
   useEffect(() => {
     const loaded = load<Task[]>(TASKS_KEY, []);
     const tmpls = load<Template[]>(TEMPLATES_KEY, []);
-    const generated = generateRecurringForToday(tmpls, loaded);
+    // Auto-purge soft-deleted tasks older than 30 days
+    const purgeCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const surviving = loaded.filter(
+      (t) => !t.deletedAt || new Date(t.deletedAt).getTime() > purgeCutoff,
+    );
+    const generated = generateRecurringForToday(tmpls, surviving);
     // Migrate legacy tasks: urgent → high priority; default trigger=time, priority=medium
-    const migrated: Task[] = [...loaded, ...generated].map((t) => ({
+    const migrated: Task[] = [...surviving, ...generated].map((t) => ({
       ...t,
       priority: (t as Task).priority ?? (t.urgent ? "high" : "medium"),
       trigger: (t as Task).trigger ?? "time",
     }));
     const merged = migrated;
-    if (generated.length) save(TASKS_KEY, merged);
+    if (generated.length || surviving.length !== loaded.length) save(TASKS_KEY, merged);
     setTasks(merged);
     setTemplates(tmpls);
     setRoutineFires(loadFires());
@@ -239,6 +246,7 @@ export const useTaskStore = () => {
       setTasks((prev) => {
         for (const t of prev) {
           if (t.completedAt) continue;
+        if (t.deletedAt) continue;
           if (t.trigger !== "routine") continue;
           if (t.occurrenceDate !== today) continue;
           if (!t.routineTime) continue;
@@ -252,6 +260,7 @@ export const useTaskStore = () => {
           toFire.set(id, { key: t.routineKey, label: t.routineLabel, label2: label });
         }
         const next = prev.map((t) => {
+          if (t.deletedAt) return t;
           if (t.completedAt) return t;
           // Apply auto-fire to matching routine tasks
           if (t.trigger === "routine" && t.occurrenceDate === today) {
@@ -464,7 +473,22 @@ export const useTaskStore = () => {
   };
 
   const removeTask = (id: string) => {
+    const now = new Date().toISOString();
+    persistTasks(
+      tasks.map((t) => (t.id === id ? { ...t, deletedAt: now } : t)),
+    );
+  };
+
+  // Hard-delete (used by auto-purge or manual "Forever delete")
+  const purgeTask = (id: string) => {
     persistTasks(tasks.filter((t) => t.id !== id));
+  };
+
+  // Undo soft delete
+  const restoreTask = (id: string) => {
+    persistTasks(
+      tasks.map((t) => (t.id === id ? { ...t, deletedAt: undefined } : t)),
+    );
   };
 
   // Fire a routine — moves all matching incomplete routine tasks into the
@@ -521,6 +545,8 @@ export const useTaskStore = () => {
     startTask,
     completeTask,
     removeTask,
+    purgeTask,
+    restoreTask,
     fireRoutine,
     routineFires: routineFires.fires,
   };

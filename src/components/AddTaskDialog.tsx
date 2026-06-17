@@ -33,8 +33,25 @@ const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 export function AddTaskDialog({
   trigger,
   onAdd,
+  open: controlledOpen,
+  onOpenChange,
+  initialValues,
 }: {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
+  initialValues?: {
+    name?: string;
+    time?: string;
+    recurrence?: Recurrence;
+    customDays?: number[];
+    urgent?: boolean;
+    priority?: Priority;
+    trigger?: TriggerType;
+    routineKey?: string;
+    routineLabel?: string;
+    routineTime?: string;
+  };
   onAdd: (input: {
     name: string;
     time: string;
@@ -48,20 +65,27 @@ export function AddTaskDialog({
     routineTime?: string;
   }) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = controlledOpen ?? openInternal;
+  const setOpen = (v: boolean) => {
+    if (onOpenChange) onOpenChange(v);
+    else setOpenInternal(v);
+  };
+  const [name, setName] = useState(initialValues?.name ?? "");
   const now = new Date();
   const defaultTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  const [time, setTime] = useState(defaultTime);
-  const [recurrence, setRecurrence] = useState<Recurrence>("none");
-  const [customDays, setCustomDays] = useState<number[]>([]);
-  const [urgent, setUrgent] = useState(false);
-  const [priority, setPriority] = useState<Priority>("medium");
-  const [triggerType, setTriggerType] = useState<TriggerType>("time");
-  const [routineKey, setRoutineKey] = useState<string>("lunch");
-  const [customRoutine, setCustomRoutine] = useState("");
+  const [time, setTime] = useState(initialValues?.time ?? defaultTime);
+  const [recurrence, setRecurrence] = useState<Recurrence>(initialValues?.recurrence ?? "none");
+  const [customDays, setCustomDays] = useState<number[]>(initialValues?.customDays ?? []);
+  const [urgent, setUrgent] = useState(initialValues?.urgent ?? false);
+  const [priority, setPriority] = useState<Priority>(initialValues?.priority ?? "medium");
+  const [triggerType, setTriggerType] = useState<TriggerType>(initialValues?.trigger ?? "time");
+  const [routineKey, setRoutineKey] = useState<string>(initialValues?.routineKey ?? "lunch");
+  const [customRoutine, setCustomRoutine] = useState(
+    initialValues?.routineKey ? "" : initialValues?.routineLabel ?? "",
+  );
   const [routineTime, setRoutineTime] = useState<string>(
-    DEFAULT_ROUTINE_TIMES["lunch"] ?? "13:00",
+    initialValues?.routineTime ?? DEFAULT_ROUTINE_TIMES[initialValues?.routineKey ?? "lunch"] ?? "13:00",
   );
   const [autoApplied, setAutoApplied] = useState(false);
   const [dismissedDetection, setDismissedDetection] = useState(false);
@@ -150,7 +174,7 @@ export function AddTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New task</DialogTitle>
