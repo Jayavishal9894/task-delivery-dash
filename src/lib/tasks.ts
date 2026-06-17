@@ -212,15 +212,20 @@ export const useTaskStore = () => {
   useEffect(() => {
     const loaded = load<Task[]>(TASKS_KEY, []);
     const tmpls = load<Template[]>(TEMPLATES_KEY, []);
-    const generated = generateRecurringForToday(tmpls, loaded);
+    // Auto-purge soft-deleted tasks older than 30 days
+    const purgeCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const surviving = loaded.filter(
+      (t) => !t.deletedAt || new Date(t.deletedAt).getTime() > purgeCutoff,
+    );
+    const generated = generateRecurringForToday(tmpls, surviving);
     // Migrate legacy tasks: urgent → high priority; default trigger=time, priority=medium
-    const migrated: Task[] = [...loaded, ...generated].map((t) => ({
+    const migrated: Task[] = [...surviving, ...generated].map((t) => ({
       ...t,
       priority: (t as Task).priority ?? (t.urgent ? "high" : "medium"),
       trigger: (t as Task).trigger ?? "time",
     }));
     const merged = migrated;
-    if (generated.length) save(TASKS_KEY, merged);
+    if (generated.length || surviving.length !== loaded.length) save(TASKS_KEY, merged);
     setTasks(merged);
     setTemplates(tmpls);
     setRoutineFires(loadFires());
