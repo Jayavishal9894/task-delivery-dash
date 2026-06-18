@@ -185,6 +185,21 @@ function AppPage() {
     [pills],
   );
 
+  const handlePillTap = (p: { rid: string; key?: string; label: string; tasks: Task[] }) => {
+    if (p.tasks.length === 0) {
+      toast.message(`No tasks for "${p.label}" today`);
+      // Still mark fired so it shows as checked-in and won't re-prompt
+      fireRoutine(p.key ? { key: p.key } : { label: p.label }, { silent: true });
+      return;
+    }
+    const count = p.key
+      ? fireRoutine({ key: p.key })
+      : fireRoutine({ label: p.label });
+    toast.success(`Done · ${p.label}`, {
+      description: `${count} task${count === 1 ? "" : "s"} ready to deliver`,
+    });
+  };
+
   const done = todays.filter((t) => taskStage(t) === 3).length;
   const total = todays.length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
