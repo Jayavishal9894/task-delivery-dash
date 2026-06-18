@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
 import {
-  Flame, Package, Plus, WifiOff, Home, History as HistoryIcon,
-  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
+  Flame, Package, Plus, WifiOff, Home, History as HistoryIcon, Check, Rocket,
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,10 +14,11 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { HistoryView } from "@/components/HistoryView";
 import { useTaskStore, getStreak, todayISO, taskStage, ROUTINES, routineId } from "@/lib/tasks";
 import type { Task, Recurrence, Priority, TriggerType } from "@/lib/tasks";
+import { useRoutineConfigs, isEnabledToday } from "@/lib/routineConfig";
 import { cn } from "@/lib/utils";
 
 const ROUTINE_ICONS = {
-  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut,
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star,
 } as const;
 
 function formatHM(hhmm: string): string {
@@ -41,9 +42,16 @@ export const Route = createFileRoute("/app")({
 function AppPage() {
   const { tasks, addTask, startTask, completeTask, removeTask, restoreTask, purgeTask, updateTask, fireRoutine, routineFires } =
     useTaskStore();
+  const { configs: routineConfigs } = useRoutineConfigs();
   const [streak, setStreak] = useState(0);
   const [online, setOnline] = useState(true);
   const [tab, setTab] = useState<"home" | "history">("home");
+  // 1s tick so "missed" state and time-window filter re-evaluate live
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const i = setInterval(() => setNowTick((x) => x + 1), 30_000);
+    return () => clearInterval(i);
+  }, []);
   const [redeliverInit, setRedeliverInit] = useState<{
     name: string;
     time: string;
@@ -97,38 +105,86 @@ function AppPage() {
     [tasks, today],
   );
 
-  // Routines attached to today's tasks. Includes fired ones so we can show
-  // "Already checked in at HH:MM" state.
-  const todaysRoutines = useMemo(() => {
-    const m = new Map<
-      string,
-      { id: string; key?: string; label: string; pending: number; total: number; time?: string }
-    >();
-    for (const t of todays) {
-      if (t.trigger !== "routine") continue;
-      const id = routineId({ key: t.routineKey, label: t.routineLabel });
-      if (!id) continue;
-      const label =
-        ROUTINES.find((r) => r.key === t.routineKey)?.label ??
-        t.routineLabel ??
-        "Routine";
-      const prev = m.get(id);
-      if (prev) {
-        prev.total++;
-        if (!t.completedAt && !t.workingAt) prev.pending++;
-      } else {
-        m.set(id, {
-          id,
-          key: t.routineKey,
-          label,
-          pending: t.completedAt || t.workingAt ? 0 : 1,
-          total: 1,
-          time: t.routineTime,
-        });
-      }
+  // Compute routine pills from user-configured routines, filtered to the
+  // current time window. Each pill carries the matching tasks for the nudge
+  // card and state computation.
+  type RoutinePill = {
+    id: string;
+    rid: string; // routineId() for fireRoutine + routineFires
+    key?: string;
+    label: string;
+    icon: keyof typeof ROUTINE_ICONS;
+    time: string;
+    tasks: Task[];
+    pending: number;
+    firedAt?: string;
+    missed: boolean;
+  };
+  const pills: RoutinePill[] = useMemo(() => {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const periodOf = (mins: number) => {
+      const h = Math.floor(mins / 60);
+      if (h < 4) return "night";
+      if (h < 12) return "morning";
+      if (h < 17) return "afternoon";
+      if (h < 22) return "evening";
+      return "night";
+    };
+    const currentPeriod = periodOf(nowMin);
+    const out: RoutinePill[] = [];
+    for (const c of routineConfigs) {
+      if (!isEnabledToday(c)) continue;
+      const [h, m] = c.time.split(":").map(Number);
+      const rMin = (h ?? 0) * 60 + (m ?? 0);
+      const inPeriod = periodOf(rMin) === currentPeriod;
+      const rid = c.key ? `k:${c.key}` : `l:${c.label.trim().toLowerCase()}`;
+      const firedAt = routineFires[rid];
+      const isPast = rMin <= nowMin;
+      const missed = isPast && !firedAt && nowMin - rMin > 90;
+      // Show pill if: in current period, OR already fired today, OR missed
+      if (!inPeriod && !firedAt && !missed) continue;
+      const matching = todays.filter(
+        (t) =>
+          t.trigger === "routine" &&
+          ((c.key && t.routineKey === c.key) ||
+            (!c.key &&
+              t.routineLabel?.trim().toLowerCase() ===
+                c.label.trim().toLowerCase())),
+      );
+      out.push({
+        id: c.id,
+        rid,
+        key: c.key,
+        label: c.label,
+        icon: (ROUTINE_ICONS[c.icon as keyof typeof ROUTINE_ICONS]
+          ? c.icon
+          : "Star") as keyof typeof ROUTINE_ICONS,
+        time: c.time,
+        tasks: matching,
+        pending: matching.filter((t) => !t.completedAt && !t.workingAt).length,
+        firedAt,
+        missed,
+      });
     }
-    return [...m.values()];
-  }, [todays]);
+    // Sort by routine time
+    out.sort((a, b) => a.time.localeCompare(b.time));
+    return out;
+  }, [routineConfigs, routineFires, todays]);
+
+  // Nudge cards: routines fired in the last 10 minutes show their tasks
+  // inline as a quick-glance reminder.
+  const nudges = useMemo(
+    () =>
+      pills.filter(
+        (p) =>
+          p.firedAt &&
+          Date.now() - new Date(p.firedAt).getTime() < 10 * 60 * 1000 &&
+          p.tasks.length > 0,
+      ),
+    [pills],
+  );
+
   const done = todays.filter((t) => taskStage(t) === 3).length;
   const total = todays.length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
@@ -184,66 +240,6 @@ function AppPage() {
           />
         ) : (
           <>
-        {todaysRoutines.length > 0 && (
-          <div className="mb-4">
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-              Routine check-in
-            </h2>
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              {todaysRoutines.map((r) => {
-                const def = r.key ? ROUTINES.find((x) => x.key === r.key) : undefined;
-                const Icon = def
-                  ? ROUTINE_ICONS[def.icon as keyof typeof ROUTINE_ICONS]
-                  : Sparkles;
-                const firedAt = routineFires[r.id];
-                const short = r.label.replace(/^After |^Before /, "");
-                if (firedAt) {
-                  const t = new Date(firedAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
-                  return (
-                    <div
-                      key={r.id}
-                      className="flex items-center gap-1.5 whitespace-nowrap rounded-full border bg-muted/60 text-muted-foreground px-3 py-1.5 text-sm font-medium"
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      <span>{short}</span>
-                      <span className="ml-1 text-xs">checked in {t}</span>
-                    </div>
-                  );
-                }
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => {
-                      const count = r.key
-                        ? fireRoutine({ key: r.key })
-                        : fireRoutine({ label: r.label });
-                      toast.success(`Done · ${r.label}`, {
-                        description: `${count} task${count === 1 ? "" : "s"} nudged`,
-                      });
-                    }}
-                    className="flex items-center gap-1.5 whitespace-nowrap rounded-full border bg-card px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted/50"
-                  >
-                    <Icon className="h-3.5 w-3.5 text-primary" />
-                    Done · {short}
-                    {r.time && (
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        ~{formatHM(r.time)}
-                      </span>
-                    )}
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      {r.pending}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         <div className="bg-card border rounded-2xl p-4 shadow-sm mb-5">
           <div className="flex items-baseline justify-between mb-2">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -255,6 +251,109 @@ function AppPage() {
           </div>
           <Progress value={pct} className="h-2" />
         </div>
+
+        {pills.length > 0 && (
+          <div className="mb-5">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Routine check-in
+            </h2>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {pills.map((p) => {
+                const Icon = ROUTINE_ICONS[p.icon];
+                const short = p.label.replace(/^After |^Before /, "");
+                if (p.firedAt) {
+                  const t = new Date(p.firedAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-500 text-white px-3 py-1.5 text-sm font-medium shadow-sm"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{short}</span>
+                      <Check className="h-3.5 w-3.5" />
+                      <span className="text-xs opacity-90">{t}</span>
+                    </div>
+                  );
+                }
+                if (p.missed) {
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handlePillTap(p)}
+                      className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-rose-300 bg-rose-50 text-rose-700 px-3 py-1 text-sm font-medium hover:bg-rose-100"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {short} — missed
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handlePillTap(p)}
+                    className="flex items-center gap-1.5 whitespace-nowrap rounded-full border bg-card px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted/50"
+                  >
+                    <Icon className="h-3.5 w-3.5 text-primary" />
+                    {short}
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      ~{formatHM(p.time)}
+                    </span>
+                    {p.pending > 0 && (
+                      <span className="ml-0.5 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                        {p.pending}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {nudges.map((p) => {
+          const Icon = ROUTINE_ICONS[p.icon];
+          return (
+            <div
+              key={`nudge-${p.id}`}
+              className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Rocket className="h-4 w-4 text-emerald-600" />
+                <span className="text-sm font-semibold text-emerald-900">
+                  Time to deliver these
+                </span>
+                <span className="text-xs text-emerald-700/80 inline-flex items-center gap-1">
+                  <Icon className="h-3 w-3" /> {p.label}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {p.tasks.map((t) => (
+                  <TaskCard
+                    key={t.id}
+                    task={t}
+                    onStart={() => startTask(t.id)}
+                    onComplete={() => completeTask(t.id)}
+                    onDelete={() => removeTask(t.id)}
+                    onUpdate={(patch) => updateTask(t.id, patch)}
+                    onSnooze={() =>
+                      updateTask(t.id, {
+                        due: new Date(
+                          Math.max(Date.now(), new Date(t.due).getTime()) +
+                            10 * 60 * 1000,
+                        ).toISOString(),
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
 
         {sorted.length === 0 ? (
           <div className="text-center py-16">
