@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Settings as SettingsIcon, Play } from "lucide-react";
+import { Settings as SettingsIcon, Play, Plus, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   loadSettings,
   saveSettings,
@@ -17,6 +18,10 @@ import {
   type AlarmTone,
   type AppSettings,
 } from "@/lib/alarm";
+import {
+  useRoutineConfigs,
+  isEnabledToday,
+} from "@/lib/routineConfig";
 
 const TONES: { id: AlarmTone; label: string; desc: string }[] = [
   { id: "beep", label: "Beep", desc: "Sharp square-wave pulse" },
@@ -27,6 +32,10 @@ const TONES: { id: AlarmTone; label: string; desc: string }[] = [
 export function SettingsDialog() {
   const [open, setOpen] = useState(false);
   const [s, setS] = useState<AppSettings | null>(null);
+  const { configs, updateConfig, toggleToday, addCustom, removeCustom } =
+    useRoutineConfigs();
+  const [newLabel, setNewLabel] = useState("");
+  const [newTime, setNewTime] = useState("12:00");
 
   useEffect(() => {
     if (open) setS(loadSettings());
@@ -49,7 +58,7 @@ export function SettingsDialog() {
           <SettingsIcon className="h-4 w-4" />
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
@@ -119,6 +128,91 @@ export function SettingsDialog() {
                     </Button>
                   </button>
                 ))}
+              </div>
+            </div>
+            <div className="space-y-3 pt-2 border-t">
+              <div>
+                <Label className="font-semibold">Routines</Label>
+                <p className="text-xs text-muted-foreground">
+                  Set the approximate time you usually do each routine. Toggle
+                  off to skip today.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {configs.map((c) => {
+                  const enabled = isEnabledToday(c);
+                  return (
+                    <div
+                      key={c.id}
+                      className="flex items-center gap-2 rounded-lg border p-2.5"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">
+                          {c.label}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {c.custom ? "Custom" : "Built-in"}
+                        </div>
+                      </div>
+                      <Input
+                        type="time"
+                        value={c.time}
+                        onChange={(e) =>
+                          updateConfig(c.id, { time: e.target.value })
+                        }
+                        className="w-[110px] h-8"
+                      />
+                      <Switch
+                        checked={enabled}
+                        onCheckedChange={() => toggleToday(c.id)}
+                        aria-label={`Enable ${c.label} today`}
+                      />
+                      {c.custom && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeCustom(c.id)}
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="rounded-lg border border-dashed p-2.5 space-y-2">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Add custom routine
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    placeholder="e.g. After workout"
+                    className="flex-1 h-8"
+                  />
+                  <Input
+                    type="time"
+                    value={newTime}
+                    onChange={(e) => setNewTime(e.target.value)}
+                    className="w-[110px] h-8"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      if (!newLabel.trim()) return;
+                      addCustom(newLabel, newTime);
+                      setNewLabel("");
+                      setNewTime("12:00");
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
