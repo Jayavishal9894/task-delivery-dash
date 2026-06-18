@@ -12,7 +12,7 @@ import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { UrgentOverlay } from "@/components/UrgentOverlay";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { HistoryView } from "@/components/HistoryView";
-import { useTaskStore, getStreak, todayISO, taskStage, ROUTINES, routineId } from "@/lib/tasks";
+import { useTaskStore, getStreak, todayISO, taskStage } from "@/lib/tasks";
 import type { Task, Recurrence, Priority, TriggerType } from "@/lib/tasks";
 import { useRoutineConfigs, isEnabledToday } from "@/lib/routineConfig";
 import { cn } from "@/lib/utils";
