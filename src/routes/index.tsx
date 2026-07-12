@@ -15,7 +15,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "The only task app that feels like your to-do list is out for delivery. Join the waitlist.",
+          "The only task app that feels like your to-do list is out for delivery. Try it free — first 500 get lifetime access.",
       },
       { property: "og:title", content: "Trackit — Stop forgetting. Start delivering." },
       {
@@ -67,6 +67,7 @@ function AnimatedPreview() {
 
 const SPOTS_CLAIMED = 347;
 const SPOTS_TOTAL = 500;
+const SPOTS_LEFT = SPOTS_TOTAL - SPOTS_CLAIMED;
 
 function WaitlistForm({ idSuffix = "" }: { idSuffix?: string }) {
   const [email, setEmail] = useState("");
@@ -98,9 +99,9 @@ function WaitlistForm({ idSuffix = "" }: { idSuffix?: string }) {
           <Check className="h-5 w-5" />
         </div>
         <div>
-          <div className="font-semibold">Your spot is locked in</div>
+          <div className="font-semibold">Your lifetime spot is locked in</div>
           <div className="text-sm text-muted-foreground">
-            We'll email you the moment it's ready.
+            You're one of the first 500. We'll email you the moment it's ready.
           </div>
         </div>
       </div>
@@ -116,24 +117,25 @@ function WaitlistForm({ idSuffix = "" }: { idSuffix?: string }) {
           placeholder="your@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="h-12"
+          className="h-11"
           maxLength={320}
           required
         />
         <Button
           type="submit"
           disabled={loading}
-          className="h-12 bg-primary hover:bg-primary/90 px-6 whitespace-nowrap"
+          variant="outline"
+          className="h-11 px-5 whitespace-nowrap"
         >
-          {loading ? "Claiming…" : "Claim my lifetime access"}
+          {loading ? "Saving…" : "Lock in lifetime access"}
         </Button>
       </form>
       <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4">
         <p className="text-xs text-muted-foreground">
-          Free forever for early members · No credit card needed
+          Free forever for the first 500 · Paid plans after that
         </p>
         <p className="text-xs font-semibold text-red-600">
-          ⚡ {SPOTS_CLAIMED} / {SPOTS_TOTAL} spots claimed
+          ⚡ Only {SPOTS_LEFT} of {SPOTS_TOTAL} lifetime spots left
         </p>
       </div>
     </div>
@@ -144,7 +146,7 @@ function Landing() {
   return (
     <div className="min-h-screen bg-background">
       <div className="w-full bg-amber-400 text-amber-950 text-center text-sm font-bold py-2 px-4">
-        🚀 Launching soon — first 500 people get lifetime access free
+        🚀 First 500 sign-ups get lifetime access free — everyone after pays a subscription
       </div>
 
       <header className="px-5 py-4 flex items-center justify-between max-w-5xl mx-auto">
@@ -154,12 +156,19 @@ function Landing() {
           </div>
           <span className="font-bold text-lg">Trackit</span>
         </div>
-        <Link
-          to="/app"
-          className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-1"
-        >
-          Try the app <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/app"
+            className="hidden sm:inline text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            Try the app
+          </Link>
+          <Button asChild size="sm" className="h-9 bg-primary hover:bg-primary/90">
+            <Link to="/app">
+              Try the app for free <ArrowRight className="h-3.5 w-3.5 ml-1" />
+            </Link>
+          </Button>
+        </div>
       </header>
 
       <main className="px-5 max-w-5xl mx-auto pt-8 pb-20">
@@ -173,16 +182,29 @@ function Landing() {
             <p className="mt-5 text-lg text-muted-foreground leading-relaxed">
               The only task app that feels like your to-do list is out for delivery.
             </p>
-            <div className="mt-8">
+            <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-3">
+              <Button
+                asChild
+                size="lg"
+                className="h-14 px-8 text-base font-semibold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
+              >
+                <Link to="/app">
+                  Try the app for free <ArrowRight className="h-5 w-5 ml-1" />
+                </Link>
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                No sign-up. No card. Instant.
+              </span>
+            </div>
+            <div className="mt-8 pt-6 border-t">
+              <p className="text-sm font-medium text-foreground">
+                Like it? Lock in lifetime access.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1 mb-3">
+                First 500 sign-ups only — after that it's a paid plan.
+              </p>
               <WaitlistForm />
             </div>
-            <p className="mt-4 text-xs text-muted-foreground">
-              Or skip the line —{" "}
-              <Link to="/app" className="text-primary font-medium underline">
-                try it now
-              </Link>
-              .
-            </p>
           </div>
           <div className="flex justify-center">
             <AnimatedPreview />
@@ -221,11 +243,14 @@ function Landing() {
         {/* What you get */}
         <section className="mt-24">
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-center">
-            Join early. Get rewarded.
+            First 500 in. Everyone else pays.
           </h2>
+          <p className="mt-3 text-center text-muted-foreground max-w-xl mx-auto">
+            Grab one of the last lifetime spots before we switch to paid subscriptions.
+          </p>
           <div className="mt-10 grid md:grid-cols-3 gap-5">
             {[
-              { icon: "🎯", title: "Lifetime access", body: "Pay nothing, ever. Yours forever." },
+              { icon: "🎯", title: "Lifetime access", body: "First 500 only. Pay nothing, ever." },
               { icon: "⚡", title: "Shape the product", body: "Your feedback directly builds what comes next." },
               { icon: "🥇", title: "First access", body: "Use it before anyone else does." },
             ].map((p) => (
@@ -241,11 +266,30 @@ function Landing() {
         {/* Second CTA */}
         <section className="mt-24">
           <div className="rounded-3xl border bg-card p-8 md:p-12 text-center">
-            <p className="text-base md:text-lg font-medium text-foreground">
-              Still scrolling? That's fine. But the 500 spots won't wait.
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
+              Try it now — decide later.
+            </h2>
+            <p className="mt-3 text-base text-muted-foreground max-w-lg mx-auto">
+              Open the app, add a task, watch it move. Takes 10 seconds.
             </p>
             <div className="mt-6 flex justify-center">
-              <WaitlistForm idSuffix="-bottom" />
+              <Button
+                asChild
+                size="lg"
+                className="h-14 px-8 text-base font-semibold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
+              >
+                <Link to="/app">
+                  Try the app for free <ArrowRight className="h-5 w-5 ml-1" />
+                </Link>
+              </Button>
+            </div>
+            <div className="mt-8 pt-6 border-t max-w-md mx-auto">
+              <p className="text-sm font-medium">
+                Loved it? Grab lifetime access before the 500 spots fill.
+              </p>
+              <div className="mt-4 flex justify-center">
+                <WaitlistForm idSuffix="-bottom" />
+              </div>
             </div>
           </div>
         </section>
