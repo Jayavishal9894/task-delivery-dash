@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
 import {
   Flame, Package, Plus, WifiOff, Home, History as HistoryIcon, Check, Rocket,
-  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star,
+  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -236,6 +236,13 @@ function AppPage() {
                 <WifiOff className="h-3.5 w-3.5" /> Offline
               </span>
             )}
+            <Link
+              to="/team"
+              className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-sm font-medium hover:bg-muted/50"
+            >
+              <Users className="h-4 w-4 text-primary" />
+              Team
+            </Link>
             <div className="flex items-center gap-1 bg-orange-50 text-orange-600 px-2.5 py-1 rounded-full text-sm font-semibold">
               <Flame className="h-4 w-4" />
               {streak} day streak
