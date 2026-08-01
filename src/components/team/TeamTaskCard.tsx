@@ -1,10 +1,19 @@
-import { useState } from "react";
-import { Clock, Trash2, UserRound, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Clock, Trash2, UserRound, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { DeliveryTracker } from "@/components/DeliveryTracker";
+import { TeamTracker } from "@/components/team/TeamTracker";
+import { SubmitProofDialog } from "@/components/team/SubmitProofDialog";
 import { cn } from "@/lib/utils";
 import {
+  proofPhotoUrl,
   teamOverdue,
   teamProgress,
   teamStage,
@@ -21,29 +30,58 @@ export function TeamTaskCard({
   task,
   assigneeName,
   canDelete,
-  canAdvance,
+  isAssignee,
+  canReview,
   onAdvance,
+  onSubmitProof,
+  onReview,
   onDelete,
 }: {
   task: TeamTask;
   assigneeName: string;
   canDelete: boolean;
-  canAdvance: boolean;
-  onAdvance: (to: 1 | 2 | 3) => void;
+  isAssignee: boolean;
+  canReview: boolean;
+  onAdvance: (to: 1 | 2) => void | Promise<void>;
+  onSubmitProof: (proof: { text?: string; photoPath?: string }) => Promise<void>;
+  onReview: (approve: boolean, comment: string | null) => Promise<void>;
   onDelete: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [comment, setComment] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const stage = teamStage(task);
   const overdue = teamOverdue(task);
   const pct = teamProgress(task);
 
-  const run = async (to: 1 | 2 | 3) => {
+  useEffect(() => {
+    let alive = true;
+    if (task.proof_photo_path) {
+      proofPhotoUrl(task.proof_photo_path).then((u) => {
+        if (alive) setPhotoUrl(u);
+      });
+    } else {
+      setPhotoUrl(null);
+    }
+    return () => {
+      alive = false;
+    };
+  }, [task.proof_photo_path]);
+
+  const run = async (fn: () => void | Promise<void>) => {
     setBusy(true);
     try {
-      await onAdvance(to);
+      await fn();
     } finally {
       setBusy(false);
     }
+  };
+
+  const reject = async () => {
+    await run(() => onReview(false, comment.trim() || null));
+    setComment("");
+    setRejectOpen(false);
   };
 
   return (
@@ -51,7 +89,7 @@ export function TeamTaskCard({
       className={cn(
         "bg-card border rounded-2xl p-4 shadow-sm",
         overdue && "border-red-300",
-        stage === 3 && "opacity-70",
+        stage === 4 && "opacity-70",
       )}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -59,7 +97,7 @@ export function TeamTaskCard({
           <h3
             className={cn(
               "font-semibold leading-tight",
-              stage === 3 && "line-through text-muted-foreground",
+              stage === 4 && "line-through text-muted-foreground",
             )}
           >
             {task.name}
@@ -91,6 +129,16 @@ export function TeamTaskCard({
                 Delayed
               </span>
             )}
+            {stage === 3 && (
+              <span className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 font-semibold">
+                In review
+              </span>
+            )}
+            {task.review_status === "rejected" && stage === 2 && (
+              <span className="rounded-full bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 font-semibold">
+                Sent back
+              </span>
+            )}
           </div>
         </div>
         {canDelete && (
@@ -109,7 +157,7 @@ export function TeamTaskCard({
         <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
       )}
 
-      <DeliveryTracker stage={stage} overdue={overdue} />
+      <TeamTracker stage={stage} overdue={overdue} />
 
       <div className="mt-3 flex items-center gap-3">
         <Progress value={pct} className="h-2 flex-1" />
@@ -118,23 +166,95 @@ export function TeamTaskCard({
         </span>
       </div>
 
-      {canAdvance && stage < 3 && (
+      {(task.proof_text || photoUrl) && (
+        <div className="mt-3 rounded-xl border bg-muted/40 p-3">
+          <div className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mb-1">
+            Proof submitted
+          </div>
+          {task.proof_text && <p className="text-sm">{task.proof_text}</p>}
+          {photoUrl && (
+            <a href={photoUrl} target="_blank" rel="noreferrer">
+              <img
+                src={photoUrl}
+                alt="Proof of completion"
+                className="mt-2 h-24 w-24 rounded-lg object-cover border"
+              />
+            </a>
+          )}
+        </div>
+      )}
+
+      {task.review_status === "rejected" && task.review_comment && (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <span className="font-semibold">Admin note:</span>{" "}
+          {task.review_comment}
+        </div>
+      )}
+
+      {(isAssignee || canReview) && stage < 4 && (
         <div className="mt-3 flex gap-2">
-          {stage < 2 && (
+          {isAssignee && stage < 2 && (
             <Button
               variant="outline"
               className="flex-1"
               disabled={busy}
-              onClick={() => run(2)}
+              onClick={() => run(() => onAdvance(2))}
             >
               <Zap className="h-4 w-4 mr-1" /> Start working
             </Button>
           )}
-          <Button className="flex-1" disabled={busy} onClick={() => run(3)}>
-            Mark as delivered
-          </Button>
+          {isAssignee && stage === 2 && (
+            <SubmitProofDialog
+              taskId={task.id}
+              onSubmit={onSubmitProof}
+            />
+          )}
+          {canReview && stage === 3 && (
+            <>
+              <Button
+                variant="outline"
+                className="flex-1"
+                disabled={busy}
+                onClick={() => setRejectOpen(true)}
+              >
+                <X className="h-4 w-4 mr-1" /> Reject
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={busy}
+                onClick={() => run(() => onReview(true, null))}
+              >
+                <Check className="h-4 w-4 mr-1" /> Approve
+              </Button>
+            </>
+          )}
         </div>
       )}
+
+      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Send back for rework</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="What's missing? (optional note to the member)"
+              rows={3}
+              maxLength={500}
+            />
+            <Button
+              variant="destructive"
+              className="w-full"
+              disabled={busy}
+              onClick={() => void reject()}
+            >
+              Reject and send back
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
