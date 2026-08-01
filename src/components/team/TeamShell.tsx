@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, ListChecks, LogOut, Package } from "lucide-react";
+import { LayoutDashboard, ListChecks, LogOut, Package, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -40,7 +40,7 @@ export function TeamShell({
           <div className="flex items-center gap-2">
             {memberships.length > 1 && (
               <select
-                aria-label="Workspace"
+                aria-label="Group"
                 className="h-9 rounded-lg border bg-background px-2 text-sm max-w-[9rem]"
                 value={active?.workspace.id ?? ""}
                 onChange={(e) => onSelect(e.target.value)}
@@ -63,12 +63,13 @@ export function TeamShell({
       <main className="max-w-2xl mx-auto px-4 pt-5">{children}</main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t">
-        <div className="max-w-2xl mx-auto grid grid-cols-2">
+        <div className="max-w-2xl mx-auto grid grid-cols-3">
+          <ShellTab to="/app" label="Personal" Icon={User} />
           <ShellTab to="/my-tasks" label="My tasks" Icon={ListChecks} />
           {active?.role === "manager" ? (
             <ShellTab to="/team" label="Team" Icon={LayoutDashboard} />
           ) : (
-            <ShellTab to="/team" label="Workspace" Icon={LayoutDashboard} />
+            <ShellTab to="/team" label="Group" Icon={LayoutDashboard} />
           )}
         </div>
       </nav>
@@ -81,7 +82,7 @@ function ShellTab({
   label,
   Icon,
 }: {
-  to: "/my-tasks" | "/team";
+  to: "/app" | "/my-tasks" | "/team";
   label: string;
   Icon: React.ComponentType<{ className?: string }>;
 }) {

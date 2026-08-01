@@ -36,11 +36,12 @@ function MyTasksPage() {
   const { memberships, active, setActive, loading } = useMemberships();
   const workspaceId = active?.workspace.id ?? null;
   const { members } = useMembers(workspaceId);
-  const { tasks, advance } = useTeamTasks(workspaceId);
+  const { tasks, advance, submitForReview } = useTeamTasks(workspaceId);
 
   const mine = tasks.filter((t) => t.assigned_to === user?.id);
   const open = mine.filter((t) => teamStage(t) < 3);
-  const done = mine.filter((t) => teamStage(t) === 3);
+  const inReview = mine.filter((t) => teamStage(t) === 3);
+  const done = mine.filter((t) => teamStage(t) === 4);
 
   const nameOf = (id: string) => {
     const m = members.find((x) => x.user_id === id);
@@ -59,7 +60,8 @@ function MyTasksPage() {
     <TeamShell memberships={memberships} active={active} onSelect={setActive}>
       <h1 className="text-xl font-bold mb-1">My tasks</h1>
       <p className="text-xs text-muted-foreground mb-4">
-        {open.length} out for delivery · {done.length} delivered
+        {open.length} out for delivery · {inReview.length} in review ·{" "}
+        {done.length} completed
       </p>
 
       {mine.length === 0 ? (
@@ -71,14 +73,17 @@ function MyTasksPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {[...open, ...done].map((t) => (
+          {[...open, ...inReview, ...done].map((t) => (
             <TeamTaskCard
               key={t.id}
               task={t}
               assigneeName={nameOf(t.assigned_to)}
               canDelete={false}
-              canAdvance
+              isAssignee
+              canReview={false}
               onAdvance={(to) => advance(t, to)}
+              onSubmitProof={(proof) => submitForReview(t, proof)}
+              onReview={() => Promise.resolve()}
               onDelete={() => {}}
             />
           ))}

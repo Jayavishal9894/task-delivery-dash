@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import type { Stage } from "@/lib/tasks";
 
 export type WorkspaceRole = "manager" | "member";
 export type TeamTask = Tables<"team_tasks">;
@@ -20,8 +19,12 @@ export type MemberRow = {
   display_name: string | null;
 };
 
-export const teamStage = (t: TeamTask): Stage => {
-  if (t.completed_at) return 3;
+/** 0 Created · 1 Scheduled · 2 In Progress · 3 Pending Review · 4 Completed */
+export type TeamStage = 0 | 1 | 2 | 3 | 4;
+
+export const teamStage = (t: TeamTask): TeamStage => {
+  if (t.completed_at) return 4;
+  if (t.submitted_at && t.review_status === "pending") return 3;
   if (t.working_at) return 2;
   if (t.started_at) return 1;
   return 0;
@@ -211,13 +214,67 @@ export function useTeamTasks(workspaceId: string | null) {
   }, [workspaceId, refresh]);
 
   const advance = useCallback(
-    async (t: TeamTask, to: 1 | 2 | 3) => {
+    async (t: TeamTask, to: 1 | 2) => {
       const patch: Partial<TeamTask> = {};
       const now = new Date().toISOString();
       if (to >= 1 && !t.started_at) patch.started_at = now;
       if (to >= 2 && !t.working_at) patch.working_at = now;
-      if (to === 3) patch.completed_at = now;
       await supabase.from("team_tasks").update(patch).eq("id", t.id);
+      void refresh();
+    },
+    [refresh],
+  );
+
+  /** Member submits proof → moves to Pending Review. */
+  const submitForReview = useCallback(
+    async (t: TeamTask, proof: { text?: string; photoPath?: string }) => {
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from("team_tasks")
+        .update({
+          started_at: t.started_at ?? now,
+          working_at: t.working_at ?? now,
+          submitted_at: now,
+          proof_text: proof.text?.trim() || null,
+          proof_photo_path: proof.photoPath ?? null,
+          review_status: "pending",
+          review_comment: null,
+        })
+        .eq("id", t.id);
+      if (error) throw error;
+      void refresh();
+    },
+    [refresh],
+  );
+
+  /** Admin approves (→ Completed) or rejects (→ back to In Progress). */
+  const reviewTask = useCallback(
+    async (
+      t: TeamTask,
+      approve: boolean,
+      comment: string | null,
+      reviewerId: string,
+    ) => {
+      const now = new Date().toISOString();
+      const patch: Partial<TeamTask> = approve
+        ? {
+            review_status: "approved",
+            reviewed_by: reviewerId,
+            reviewed_at: now,
+            completed_at: now,
+            review_comment: comment,
+          }
+        : {
+            review_status: "rejected",
+            reviewed_by: reviewerId,
+            reviewed_at: now,
+            review_comment: comment,
+          };
+      const { error } = await supabase
+        .from("team_tasks")
+        .update(patch)
+        .eq("id", t.id);
+      if (error) throw error;
       void refresh();
     },
     [refresh],
@@ -231,5 +288,36 @@ export function useTeamTasks(workspaceId: string | null) {
     [refresh],
   );
 
-  return { tasks, loading, refresh, advance, remove };
+  return { tasks, loading, refresh, advance, submitForReview, reviewTask, remove };
+}
+
+/** Upload a proof photo to the private task-proofs bucket. Returns its path. */
+export async function uploadProofPhoto(
+  taskId: string,
+  file: File,
+): Promise<string> {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${taskId}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from("task-proofs")
+    .upload(path, file);
+  if (error) throw error;
+  return path;
+}
+
+/** Signed URL (1h) so group members and admins can view a proof photo. */
+export async function proofPhotoUrl(path: string): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from("task-proofs")
+    .createSignedUrl(path, 60 * 60);
+  return error ? null : data.signedUrl;
+}
+
+/** Join a group by its invite code. Returns the workspace id. */
+export async function joinWorkspaceByCode(code: string): Promise<string> {
+  const { data, error } = await supabase.rpc("join_workspace_by_code", {
+    _code: code,
+  });
+  if (error) throw error;
+  return data as string;
 }
