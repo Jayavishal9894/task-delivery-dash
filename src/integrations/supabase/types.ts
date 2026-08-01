@@ -49,7 +49,14 @@ export type Database = {
           id: string
           name: string
           priority: string
+          proof_photo_path: string | null
+          proof_text: string | null
+          review_comment: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           started_at: string | null
+          submitted_at: string | null
           updated_at: string
           urgent: boolean
           working_at: string | null
@@ -65,7 +72,14 @@ export type Database = {
           id?: string
           name: string
           priority?: string
+          proof_photo_path?: string | null
+          proof_text?: string | null
+          review_comment?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           started_at?: string | null
+          submitted_at?: string | null
           updated_at?: string
           urgent?: boolean
           working_at?: string | null
@@ -81,7 +95,14 @@ export type Database = {
           id?: string
           name?: string
           priority?: string
+          proof_photo_path?: string | null
+          proof_text?: string | null
+          review_comment?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           started_at?: string | null
+          submitted_at?: string | null
           updated_at?: string
           urgent?: boolean
           working_at?: string | null
@@ -195,6 +216,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          invite_code: string
           name: string
           owner_id: string
           updated_at: string
@@ -202,6 +224,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          invite_code?: string
           name: string
           owner_id: string
           updated_at?: string
@@ -209,6 +232,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          invite_code?: string
           name?: string
           owner_id?: string
           updated_at?: string
@@ -232,6 +256,7 @@ export type Database = {
         Args: { _user_id: string; _workspace_id: string }
         Returns: boolean
       }
+      join_workspace_by_code: { Args: { _code: string }; Returns: string }
       shares_workspace: { Args: { _a: string; _b: string }; Returns: boolean }
     }
     Enums: {
