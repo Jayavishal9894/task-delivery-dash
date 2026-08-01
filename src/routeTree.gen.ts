@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedTeamRouteImport } from './routes/_authenticated/team'
 import { Route as AuthenticatedMyTasksRouteImport } from './routes/_authenticated/my-tasks'
+import { Route as AuthenticatedChooseRouteImport } from './routes/_authenticated/choose'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -45,11 +46,17 @@ const AuthenticatedMyTasksRoute = AuthenticatedMyTasksRouteImport.update({
   path: '/my-tasks',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedChooseRoute = AuthenticatedChooseRouteImport.update({
+  id: '/choose',
+  path: '/choose',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/choose': typeof AuthenticatedChooseRoute
   '/my-tasks': typeof AuthenticatedMyTasksRoute
   '/team': typeof AuthenticatedTeamRoute
 }
@@ -57,6 +64,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/choose': typeof AuthenticatedChooseRoute
   '/my-tasks': typeof AuthenticatedMyTasksRoute
   '/team': typeof AuthenticatedTeamRoute
 }
@@ -66,20 +74,22 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/_authenticated/choose': typeof AuthenticatedChooseRoute
   '/_authenticated/my-tasks': typeof AuthenticatedMyTasksRoute
   '/_authenticated/team': typeof AuthenticatedTeamRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/auth' | '/my-tasks' | '/team'
+  fullPaths: '/' | '/app' | '/auth' | '/choose' | '/my-tasks' | '/team'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app' | '/auth' | '/my-tasks' | '/team'
+  to: '/' | '/app' | '/auth' | '/choose' | '/my-tasks' | '/team'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/app'
     | '/auth'
+    | '/_authenticated/choose'
     | '/_authenticated/my-tasks'
     | '/_authenticated/team'
   fileRoutesById: FileRoutesById
@@ -135,15 +145,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMyTasksRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/choose': {
+      id: '/_authenticated/choose'
+      path: '/choose'
+      fullPath: '/choose'
+      preLoaderRoute: typeof AuthenticatedChooseRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedChooseRoute: typeof AuthenticatedChooseRoute
   AuthenticatedMyTasksRoute: typeof AuthenticatedMyTasksRoute
   AuthenticatedTeamRoute: typeof AuthenticatedTeamRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedChooseRoute: AuthenticatedChooseRoute,
   AuthenticatedMyTasksRoute: AuthenticatedMyTasksRoute,
   AuthenticatedTeamRoute: AuthenticatedTeamRoute,
 }
@@ -160,3 +179,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
