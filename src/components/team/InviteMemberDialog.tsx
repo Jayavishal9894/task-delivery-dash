@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Mail, UserPlus } from "lucide-react";
+import { Copy, KeyRound, Link2, Loader2, Mail, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,11 @@ type Invite = {
 
 export function InviteMemberDialog({
   workspaceId,
+  inviteCode,
   managerId,
 }: {
   workspaceId: string;
+  inviteCode: string;
   managerId: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -74,6 +76,17 @@ export function InviteMemberDialog({
     void load();
   };
 
+  const inviteLink = `${window.location.origin}/auth?join=${inviteCode}`;
+
+  const copy = async (value: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${what} copied`);
+    } catch {
+      toast.error("Couldn't copy — long-press to copy manually");
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -83,8 +96,46 @@ export function InviteMemberDialog({
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Invite to workspace</DialogTitle>
+          <DialogTitle>Invite to group</DialogTitle>
         </DialogHeader>
+        <div className="rounded-xl border bg-muted/40 p-3 space-y-2">
+          <div className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+            Invite code
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-mono text-lg font-bold tracking-[0.25em]">
+              {inviteCode}
+            </span>
+            <div className="flex gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void copy(inviteCode, "Code")}
+              >
+                <Copy className="h-3.5 w-3.5 mr-1" /> Code
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void copy(inviteLink, "Link")}
+              >
+                <Link2 className="h-3.5 w-3.5 mr-1" /> Link
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Anyone with the code or link joins as a member after signing in.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+            <KeyRound className="h-3 w-3" /> or invite by email
+          </span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="iemail">Email</Label>

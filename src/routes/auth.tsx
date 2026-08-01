@@ -9,6 +9,9 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    join: typeof search.join === "string" ? search.join : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Sign in to Trackit — Team task delivery" },
@@ -32,6 +35,7 @@ export const Route = createFileRoute("/auth")({
 const emailSchema = z.string().trim().email().max(320);
 
 function AuthPage() {
+  const { join } = Route.useSearch();
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -41,9 +45,14 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/team", replace: true });
+      if (data.user)
+        navigate({
+          to: "/choose",
+          search: join ? { join } : {},
+          replace: true,
+        });
     });
-  }, [navigate]);
+  }, [navigate, join]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +83,8 @@ function AuthPage() {
         if (error) throw error;
       }
       const { data } = await supabase.auth.getSession();
-      if (data.session) navigate({ to: "/team", replace: true });
+      if (data.session)
+        navigate({ to: "/choose", search: join ? { join } : {}, replace: true });
       else
         toast.message("Check your inbox", {
           description: "Confirm your email, then sign in.",
@@ -103,9 +113,16 @@ function AuthPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1 mb-5">
             {mode === "signin"
-              ? "Sign in to your team workspace."
-              : "Start assigning and tracking team deliveries."}
+              ? "Sign in to your personal list and groups."
+              : "Personal tasks, team tasks — or both."}
           </p>
+          {join && (
+            <div className="mb-4 rounded-xl border bg-primary/5 px-3 py-2 text-sm">
+              You'll join a group with code{" "}
+              <span className="font-mono font-bold tracking-widest">{join}</span>{" "}
+              after signing in.
+            </div>
+          )}
           <form onSubmit={submit} className="space-y-4">
             {mode === "signup" && (
               <div className="space-y-1.5">
