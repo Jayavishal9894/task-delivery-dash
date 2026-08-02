@@ -42,6 +42,8 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [awaitingConfirm, setAwaitingConfirm] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -73,26 +75,58 @@ function AuthPage() {
         });
         if (error) throw error;
         toast.success("Account created", {
-          description: "You're all set — heading to your workspace.",
+          description:
+            "Check your inbox for a verification link to activate it.",
         });
+        setAwaitingConfirm(true);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: parsed.data,
           password,
         });
-        if (error) throw error;
+        if (error) {
+          if (
+            error.message.toLowerCase().includes("email not confirmed") ||
+            (error as { code?: string }).code === "email_not_confirmed"
+          )
+            setAwaitingConfirm(true);
+          throw error;
+        }
       }
       const { data } = await supabase.auth.getSession();
       if (data.session)
         navigate({ to: "/choose", search: join ? { join } : {}, replace: true });
-      else
+      else {
+        setAwaitingConfirm(true);
         toast.message("Check your inbox", {
           description: "Confirm your email, then sign in.",
         });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const resendVerification = async () => {
+    const parsed = emailSchema.safeParse(email);
+    if (!parsed.success) return toast.error("Enter your email address first");
+    setResendBusy(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: parsed.data,
+        options: { emailRedirectTo: `${window.location.origin}/team` },
+      });
+      if (error) throw error;
+      toast.success("Verification email resent", {
+        description: "Check your inbox — and the spam folder too.",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not resend email");
+    } finally {
+      setResendBusy(false);
     }
   };
 
@@ -167,6 +201,27 @@ function AuthPage() {
               {mode === "signin" ? "Sign in" : "Create account"}
             </Button>
           </form>
+          {awaitingConfirm && (
+            <div className="mt-4 rounded-xl border bg-primary/5 px-3 py-3 text-sm space-y-2">
+              <p>
+                Your email isn't verified yet. We sent a confirmation link to{" "}
+                <span className="font-medium">{email}</span> — check your inbox
+                and spam folder.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={resendBusy}
+                onClick={resendVerification}
+              >
+                {resendBusy && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                Resend verification email
+              </Button>
+            </div>
+          )}
           <button
             type="button"
             className="mt-4 w-full text-sm text-muted-foreground hover:text-foreground"
