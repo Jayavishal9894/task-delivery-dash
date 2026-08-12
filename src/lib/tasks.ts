@@ -593,11 +593,8 @@ export const useTaskStore = () => {
   };
 };
 
-export const getStreak = async (): Promise<number> => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const key = scopedKey(STREAK_KEY, user?.id ?? null);
+export const getStreak = (userId?: string | null): number => {
+  const key = scopedKey(STREAK_KEY, userId ?? null);
   const s = load<{ count: number; lastDate: string }>(key, {
     count: 0,
     lastDate: "",
