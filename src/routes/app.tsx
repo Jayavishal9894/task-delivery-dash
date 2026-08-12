@@ -76,6 +76,7 @@ function AppPage() {
   const [streak, setStreak] = useState(0);
   const [online, setOnline] = useState(true);
   const [tab, setTab] = useState<"home" | "history">("home");
+  const [userId, setUserId] = useState<string | null>(null);
 
   const handleSignOut = async () => {
     await queryClient.cancelQueries();
