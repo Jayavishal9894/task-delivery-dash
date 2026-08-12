@@ -127,7 +127,7 @@ function AppPage() {
   };
 
   useEffect(() => {
-    setStreak(getStreak());
+    setStreak(getStreak(userId));
     setOnline(navigator.onLine);
     const on = () => {
       setOnline(true);
@@ -140,7 +140,7 @@ function AppPage() {
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
     };
-  }, [tasks.length]);
+  }, [tasks.length, userId]);
 
   const today = todayISO();
   const todays = useMemo(
