@@ -68,6 +68,8 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { tasks, addTask, startTask, completeTask, removeTask, restoreTask, purgeTask, updateTask, fireRoutine, routineFires } =
     useTaskStore();
   const { configs: routineConfigs } = useRoutineConfigs();
