@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export type Recurrence = "none" | "daily" | "weekly" | "custom";
 export type Priority = "low" | "medium" | "high";
