@@ -286,6 +286,15 @@ function AppPage() {
               {streak} day streak
             </div>
             <SettingsDialog />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSignOut}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </header>
