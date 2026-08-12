@@ -368,7 +368,7 @@ export const useTaskStore = () => {
           updated.fires[id] = nowIso;
           notify("Trackit", `${info.label2} — time to check in`, { persistent: true });
         }
-        saveFires(updated);
+        saveFiresForUser(updated);
         setRoutineFires(updated);
       }
       force((x) => x + 1);
@@ -380,15 +380,15 @@ export const useTaskStore = () => {
 
   const persistTasks = (next: Task[]) => {
     setTasks(next);
-    save(TASKS_KEY, next);
+    save(tasksKey, next);
   };
   const persistTemplates = (next: Template[]) => {
     setTemplates(next);
-    save(TEMPLATES_KEY, next);
+    save(templatesKey, next);
   };
   const persistFires = (next: RoutineFires) => {
     setRoutineFires(next);
-    saveFires(next);
+    saveFiresForUser(next);
   };
 
   const addTask = useCallback(
