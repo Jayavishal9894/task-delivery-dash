@@ -538,7 +538,7 @@ export const useTaskStore = () => {
     (matcher: { key?: string; label?: string }, opts: { silent?: boolean } = {}) => {
       const id = routineId(matcher);
       if (!id) return 0;
-      const fires = loadFires();
+      const fires = loadFiresForUser();
       if (fires.fires[id]) return 0; // already checked in today
       const now = new Date().toISOString();
       const today = todayISO();
