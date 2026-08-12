@@ -53,6 +53,11 @@ function formatHM(hhmm: string): string {
 }
 
 export const Route = createFileRoute("/app")({
+  ssr: false,
+  beforeLoad: async () => {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) throw redirect({ to: "/login" });
+  },
   head: () => ({
     meta: [
       { title: "Trackit — Your tasks, out for delivery" },
