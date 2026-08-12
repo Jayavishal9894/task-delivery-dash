@@ -38,11 +38,13 @@ function groupByDate(tasks: Task[], pick: (t: Task) => string | undefined) {
 
 export function HistoryView({
   tasks,
+  userId,
   onRedeliver,
   onRestore,
   onPurge,
 }: {
   tasks: Task[];
+  userId?: string | null;
   onRedeliver: (t: Task) => void;
   onRestore: (id: string) => void;
   onPurge: (id: string) => void;
@@ -76,7 +78,7 @@ export function HistoryView({
         <DailyReport
           tasks={yesterdaysTasks}
           dateISO={yesterdayISO()}
-          streak={getStreak()}
+          streak={getStreak(userId)}
         />
       )}
 

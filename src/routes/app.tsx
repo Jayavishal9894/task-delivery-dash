@@ -1,8 +1,30 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, useEffect } from "react";
 import {
-  Flame, Package, Plus, WifiOff, Home, History as HistoryIcon, Check, Rocket,
-  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star, Users,
+  Flame,
+  Package,
+  Plus,
+  WifiOff,
+  Home,
+  History as HistoryIcon,
+  Check,
+  Rocket,
+  Sunrise,
+  Sparkles,
+  Coffee,
+  Utensils,
+  UtensilsCrossed,
+  Moon,
+  Building2,
+  LogOut,
+  Star,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,6 +37,7 @@ import { HistoryView } from "@/components/HistoryView";
 import { useTaskStore, getStreak, todayISO, taskStage } from "@/lib/tasks";
 import type { Task, Recurrence, Priority, TriggerType } from "@/lib/tasks";
 import { useRoutineConfigs, isEnabledToday } from "@/lib/routineConfig";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const ROUTINE_ICONS = {
@@ -30,6 +53,11 @@ function formatHM(hhmm: string): string {
 }
 
 export const Route = createFileRoute("/app")({
+  ssr: false,
+  beforeLoad: async () => {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) throw redirect({ to: "/login" });
+  },
   head: () => ({
     meta: [
       { title: "Trackit — Your tasks, out for delivery" },
@@ -40,12 +68,27 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { tasks, addTask, startTask, completeTask, removeTask, restoreTask, purgeTask, updateTask, fireRoutine, routineFires } =
     useTaskStore();
   const { configs: routineConfigs } = useRoutineConfigs();
   const [streak, setStreak] = useState(0);
   const [online, setOnline] = useState(true);
   const [tab, setTab] = useState<"home" | "history">("home");
+  const [userId, setUserId] = useState<string | null>(null);
+
+  const handleSignOut = async () => {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/login", replace: true });
+  };
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
+
   // 1s tick so "missed" state and time-window filter re-evaluate live
   const [, setNowTick] = useState(0);
   useEffect(() => {
@@ -84,7 +127,7 @@ function AppPage() {
   };
 
   useEffect(() => {
-    setStreak(getStreak());
+    setStreak(getStreak(userId));
     setOnline(navigator.onLine);
     const on = () => {
       setOnline(true);
@@ -97,7 +140,7 @@ function AppPage() {
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
     };
-  }, [tasks.length]);
+  }, [tasks.length, userId]);
 
   const today = todayISO();
   const todays = useMemo(
@@ -248,6 +291,15 @@ function AppPage() {
               {streak} day streak
             </div>
             <SettingsDialog />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSignOut}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </header>

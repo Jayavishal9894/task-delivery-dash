@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export type Recurrence = "none" | "daily" | "weekly" | "custom";
 export type Priority = "low" | "medium" | "high";
@@ -102,19 +103,11 @@ const TEMPLATES_KEY = "trackit.templates.v1";
 const STREAK_KEY = "trackit.streak.v1";
 const ROUTINE_FIRES_KEY = "trackit.routineFires.v1";
 
+const scopedKey = (base: string, userId: string | null) =>
+  userId ? `${base}.${userId}` : base;
+
 type RoutineFires = { date: string; fires: Record<string, string> };
 const emptyFires = (): RoutineFires => ({ date: todayISO(), fires: {} });
-
-const loadFires = (): RoutineFires => {
-  const f = load<RoutineFires>(ROUTINE_FIRES_KEY, emptyFires());
-  if (f.date !== todayISO()) {
-    const fresh = emptyFires();
-    save(ROUTINE_FIRES_KEY, fresh);
-    return fresh;
-  }
-  return f;
-};
-const saveFires = (f: RoutineFires) => save(ROUTINE_FIRES_KEY, f);
 
 const notify = (
   title: string,
@@ -207,11 +200,58 @@ export const useTaskStore = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [routineFires, setRoutineFires] = useState<RoutineFires>(emptyFires);
+  const [userId, setUserId] = useState<string | null>(null);
   const [, force] = useState(0);
 
+  const tasksKey = scopedKey(TASKS_KEY, userId);
+  const templatesKey = scopedKey(TEMPLATES_KEY, userId);
+  const streakKey = scopedKey(STREAK_KEY, userId);
+  const firesKey = scopedKey(ROUTINE_FIRES_KEY, userId);
+
+  const loadFiresForUser = useCallback((): RoutineFires => {
+    const f = load<RoutineFires>(firesKey, emptyFires());
+    if (f.date !== todayISO()) {
+      const fresh = emptyFires();
+      save(firesKey, fresh);
+      return fresh;
+    }
+    return f;
+  }, [firesKey]);
+
+  const saveFiresForUser = useCallback(
+    (f: RoutineFires) => save(firesKey, f),
+    [firesKey],
+  );
+
   useEffect(() => {
-    const loaded = load<Task[]>(TASKS_KEY, []);
-    const tmpls = load<Template[]>(TEMPLATES_KEY, []);
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (userId === null) return;
+
+    let loaded = load<Task[]>(tasksKey, []);
+    let tmpls = load<Template[]>(templatesKey, []);
+
+    // One-time migration: if the user-scoped key is empty but legacy
+    // unscoped data exists, copy it over so existing users keep their tasks.
+    if (loaded.length === 0) {
+      const legacy = load<Task[]>(TASKS_KEY, []);
+      if (legacy.length > 0) {
+        loaded = legacy;
+        save(tasksKey, legacy);
+      }
+    }
+    if (tmpls.length === 0) {
+      const legacy = load<Template[]>(TEMPLATES_KEY, []);
+      if (legacy.length > 0) {
+        tmpls = legacy;
+        save(templatesKey, legacy);
+      }
+    }
+
     // Auto-purge soft-deleted tasks older than 30 days
     const purgeCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const surviving = loaded.filter(
@@ -225,11 +265,12 @@ export const useTaskStore = () => {
       trigger: (t as Task).trigger ?? "time",
     }));
     const merged = migrated;
-    if (generated.length || surviving.length !== loaded.length) save(TASKS_KEY, merged);
+    if (generated.length || surviving.length !== loaded.length || merged.length !== loaded.length)
+      save(tasksKey, merged);
     setTasks(merged);
     setTemplates(tmpls);
-    setRoutineFires(loadFires());
-  }, []);
+    setRoutineFires(loadFiresForUser());
+  }, [userId, tasksKey, templatesKey, loadFiresForUser]);
 
   // tick every 15s: re-evaluate overdue, auto-advance to "In Progress" 30 min
   // before deadline, and fire 10-min / due notifications
@@ -238,7 +279,7 @@ export const useTaskStore = () => {
       const now = Date.now();
       let changed = false;
       // Auto-fire routine-triggered tasks whose routineTime has arrived
-      const fires = loadFires();
+      const fires = loadFiresForUser();
       const nowD = new Date();
       const hhmm = `${String(nowD.getHours()).padStart(2, "0")}:${String(nowD.getMinutes()).padStart(2, "0")}`;
       const today = todayISO();
@@ -314,7 +355,7 @@ export const useTaskStore = () => {
           }
           return t;
         });
-        if (changed) save(TASKS_KEY, next);
+        if (changed) save(tasksKey, next);
         return next;
       });
       if (toFire.size) {
@@ -327,7 +368,7 @@ export const useTaskStore = () => {
           updated.fires[id] = nowIso;
           notify("Trackit", `${info.label2} — time to check in`, { persistent: true });
         }
-        saveFires(updated);
+        saveFiresForUser(updated);
         setRoutineFires(updated);
       }
       force((x) => x + 1);
@@ -339,15 +380,15 @@ export const useTaskStore = () => {
 
   const persistTasks = (next: Task[]) => {
     setTasks(next);
-    save(TASKS_KEY, next);
+    save(tasksKey, next);
   };
   const persistTemplates = (next: Template[]) => {
     setTemplates(next);
-    save(TEMPLATES_KEY, next);
+    save(templatesKey, next);
   };
   const persistFires = (next: RoutineFires) => {
     setRoutineFires(next);
-    saveFires(next);
+    saveFiresForUser(next);
   };
 
   const addTask = useCallback(
@@ -419,7 +460,7 @@ export const useTaskStore = () => {
               ? { ...t, startedAt: new Date().toISOString() }
               : t,
           );
-          save(TASKS_KEY, next);
+          save(tasksKey, next);
           return next;
         });
       }, 1000);
@@ -458,7 +499,7 @@ export const useTaskStore = () => {
       ),
     );
     // streak update
-    const s = load<{ count: number; lastDate: string }>(STREAK_KEY, {
+    const s = load<{ count: number; lastDate: string }>(streakKey, {
       count: 0,
       lastDate: "",
     });
@@ -468,7 +509,7 @@ export const useTaskStore = () => {
       y.setDate(y.getDate() - 1);
       const yStr = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
       const newCount = s.lastDate === yStr ? s.count + 1 : 1;
-      save(STREAK_KEY, { count: newCount, lastDate: today });
+      save(streakKey, { count: newCount, lastDate: today });
     }
   };
 
@@ -497,7 +538,7 @@ export const useTaskStore = () => {
     (matcher: { key?: string; label?: string }, opts: { silent?: boolean } = {}) => {
       const id = routineId(matcher);
       if (!id) return 0;
-      const fires = loadFires();
+      const fires = loadFiresForUser();
       if (fires.fires[id]) return 0; // already checked in today
       const now = new Date().toISOString();
       const today = todayISO();
@@ -552,8 +593,9 @@ export const useTaskStore = () => {
   };
 };
 
-export const getStreak = (): number => {
-  const s = load<{ count: number; lastDate: string }>(STREAK_KEY, {
+export const getStreak = (userId?: string | null): number => {
+  const key = scopedKey(STREAK_KEY, userId ?? null);
+  const s = load<{ count: number; lastDate: string }>(key, {
     count: 0,
     lastDate: "",
   });

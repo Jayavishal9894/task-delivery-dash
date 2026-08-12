@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AuthPage } from "@/components/AuthPage";
 
-export const Route = createFileRoute("/auth")({
+export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
     join: typeof search.join === "string" ? search.join : undefined,
   }),
