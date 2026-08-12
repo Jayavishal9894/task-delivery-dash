@@ -85,6 +85,10 @@ function AppPage() {
     navigate({ to: "/login", replace: true });
   };
 
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
+
   // 1s tick so "missed" state and time-window filter re-evaluate live
   const [, setNowTick] = useState(0);
   useEffect(() => {
