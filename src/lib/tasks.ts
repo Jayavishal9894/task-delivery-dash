@@ -355,7 +355,7 @@ export const useTaskStore = () => {
           }
           return t;
         });
-        if (changed) save(TASKS_KEY, next);
+        if (changed) save(tasksKey, next);
         return next;
       });
       if (toFire.size) {
@@ -460,7 +460,7 @@ export const useTaskStore = () => {
               ? { ...t, startedAt: new Date().toISOString() }
               : t,
           );
-          save(TASKS_KEY, next);
+          save(tasksKey, next);
           return next;
         });
       }, 1000);
@@ -499,7 +499,7 @@ export const useTaskStore = () => {
       ),
     );
     // streak update
-    const s = load<{ count: number; lastDate: string }>(STREAK_KEY, {
+    const s = load<{ count: number; lastDate: string }>(streakKey, {
       count: 0,
       lastDate: "",
     });
@@ -509,7 +509,7 @@ export const useTaskStore = () => {
       y.setDate(y.getDate() - 1);
       const yStr = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
       const newCount = s.lastDate === yStr ? s.count + 1 : 1;
-      save(STREAK_KEY, { count: newCount, lastDate: today });
+      save(streakKey, { count: newCount, lastDate: today });
     }
   };
 
@@ -593,8 +593,12 @@ export const useTaskStore = () => {
   };
 };
 
-export const getStreak = (): number => {
-  const s = load<{ count: number; lastDate: string }>(STREAK_KEY, {
+export const getStreak = async (): Promise<number> => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const key = scopedKey(STREAK_KEY, user?.id ?? null);
+  const s = load<{ count: number; lastDate: string }>(key, {
     count: 0,
     lastDate: "",
   });
