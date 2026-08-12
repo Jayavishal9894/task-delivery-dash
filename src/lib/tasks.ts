@@ -200,11 +200,58 @@ export const useTaskStore = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [routineFires, setRoutineFires] = useState<RoutineFires>(emptyFires);
+  const [userId, setUserId] = useState<string | null>(null);
   const [, force] = useState(0);
 
+  const tasksKey = scopedKey(TASKS_KEY, userId);
+  const templatesKey = scopedKey(TEMPLATES_KEY, userId);
+  const streakKey = scopedKey(STREAK_KEY, userId);
+  const firesKey = scopedKey(ROUTINE_FIRES_KEY, userId);
+
+  const loadFiresForUser = useCallback((): RoutineFires => {
+    const f = load<RoutineFires>(firesKey, emptyFires());
+    if (f.date !== todayISO()) {
+      const fresh = emptyFires();
+      save(firesKey, fresh);
+      return fresh;
+    }
+    return f;
+  }, [firesKey]);
+
+  const saveFiresForUser = useCallback(
+    (f: RoutineFires) => save(firesKey, f),
+    [firesKey],
+  );
+
   useEffect(() => {
-    const loaded = load<Task[]>(TASKS_KEY, []);
-    const tmpls = load<Template[]>(TEMPLATES_KEY, []);
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (userId === null) return;
+
+    let loaded = load<Task[]>(tasksKey, []);
+    let tmpls = load<Template[]>(templatesKey, []);
+
+    // One-time migration: if the user-scoped key is empty but legacy
+    // unscoped data exists, copy it over so existing users keep their tasks.
+    if (loaded.length === 0) {
+      const legacy = load<Task[]>(TASKS_KEY, []);
+      if (legacy.length > 0) {
+        loaded = legacy;
+        save(tasksKey, legacy);
+      }
+    }
+    if (tmpls.length === 0) {
+      const legacy = load<Template[]>(TEMPLATES_KEY, []);
+      if (legacy.length > 0) {
+        tmpls = legacy;
+        save(templatesKey, legacy);
+      }
+    }
+
     // Auto-purge soft-deleted tasks older than 30 days
     const purgeCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const surviving = loaded.filter(
@@ -218,11 +265,12 @@ export const useTaskStore = () => {
       trigger: (t as Task).trigger ?? "time",
     }));
     const merged = migrated;
-    if (generated.length || surviving.length !== loaded.length) save(TASKS_KEY, merged);
+    if (generated.length || surviving.length !== loaded.length || merged.length !== loaded.length)
+      save(tasksKey, merged);
     setTasks(merged);
     setTemplates(tmpls);
-    setRoutineFires(loadFires());
-  }, []);
+    setRoutineFires(loadFiresForUser());
+  }, [userId, tasksKey, templatesKey, loadFiresForUser]);
 
   // tick every 15s: re-evaluate overdue, auto-advance to "In Progress" 30 min
   // before deadline, and fire 10-min / due notifications
