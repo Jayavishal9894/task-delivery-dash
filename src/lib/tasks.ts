@@ -279,7 +279,7 @@ export const useTaskStore = () => {
       const now = Date.now();
       let changed = false;
       // Auto-fire routine-triggered tasks whose routineTime has arrived
-      const fires = loadFires();
+      const fires = loadFiresForUser();
       const nowD = new Date();
       const hhmm = `${String(nowD.getHours()).padStart(2, "0")}:${String(nowD.getMinutes()).padStart(2, "0")}`;
       const today = todayISO();
