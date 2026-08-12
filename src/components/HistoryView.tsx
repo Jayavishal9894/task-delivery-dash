@@ -78,7 +78,7 @@ export function HistoryView({
         <DailyReport
           tasks={yesterdaysTasks}
           dateISO={yesterdayISO()}
-          streak={getStreak()}
+          streak={getStreak(userId)}
         />
       )}
 
