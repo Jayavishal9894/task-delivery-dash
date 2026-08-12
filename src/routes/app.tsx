@@ -1,8 +1,30 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, useEffect } from "react";
 import {
-  Flame, Package, Plus, WifiOff, Home, History as HistoryIcon, Check, Rocket,
-  Sunrise, Sparkles, Coffee, Utensils, UtensilsCrossed, Moon, Building2, LogOut, Star, Users,
+  Flame,
+  Package,
+  Plus,
+  WifiOff,
+  Home,
+  History as HistoryIcon,
+  Check,
+  Rocket,
+  Sunrise,
+  Sparkles,
+  Coffee,
+  Utensils,
+  UtensilsCrossed,
+  Moon,
+  Building2,
+  LogOut,
+  Star,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,6 +37,7 @@ import { HistoryView } from "@/components/HistoryView";
 import { useTaskStore, getStreak, todayISO, taskStage } from "@/lib/tasks";
 import type { Task, Recurrence, Priority, TriggerType } from "@/lib/tasks";
 import { useRoutineConfigs, isEnabledToday } from "@/lib/routineConfig";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const ROUTINE_ICONS = {
