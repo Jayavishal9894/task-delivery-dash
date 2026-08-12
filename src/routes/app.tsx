@@ -76,6 +76,14 @@ function AppPage() {
   const [streak, setStreak] = useState(0);
   const [online, setOnline] = useState(true);
   const [tab, setTab] = useState<"home" | "history">("home");
+
+  const handleSignOut = async () => {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/login", replace: true });
+  };
+
   // 1s tick so "missed" state and time-window filter re-evaluate live
   const [, setNowTick] = useState(0);
   useEffect(() => {
