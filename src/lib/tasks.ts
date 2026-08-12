@@ -103,19 +103,11 @@ const TEMPLATES_KEY = "trackit.templates.v1";
 const STREAK_KEY = "trackit.streak.v1";
 const ROUTINE_FIRES_KEY = "trackit.routineFires.v1";
 
+const scopedKey = (base: string, userId: string | null) =>
+  userId ? `${base}.${userId}` : base;
+
 type RoutineFires = { date: string; fires: Record<string, string> };
 const emptyFires = (): RoutineFires => ({ date: todayISO(), fires: {} });
-
-const loadFires = (): RoutineFires => {
-  const f = load<RoutineFires>(ROUTINE_FIRES_KEY, emptyFires());
-  if (f.date !== todayISO()) {
-    const fresh = emptyFires();
-    save(ROUTINE_FIRES_KEY, fresh);
-    return fresh;
-  }
-  return f;
-};
-const saveFires = (f: RoutineFires) => save(ROUTINE_FIRES_KEY, f);
 
 const notify = (
   title: string,
