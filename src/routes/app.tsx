@@ -56,7 +56,7 @@ export const Route = createFileRoute("/app")({
   ssr: false,
   beforeLoad: async () => {
     const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) throw redirect({ to: "/login" });
+    if (error || !data.user) throw redirect({ to: "/login", search: {} });
   },
   head: () => ({
     meta: [
@@ -82,7 +82,7 @@ function AppPage() {
     await queryClient.cancelQueries();
     queryClient.clear();
     await supabase.auth.signOut();
-    navigate({ to: "/login", replace: true });
+    navigate({ to: "/login", replace: true, search: {} });
   };
 
   useEffect(() => {
@@ -308,6 +308,7 @@ function AppPage() {
         {tab === "history" ? (
           <HistoryView
             tasks={tasks}
+            userId={userId}
             onRedeliver={handleRedeliver}
             onRestore={restoreTask}
             onPurge={purgeTask}
