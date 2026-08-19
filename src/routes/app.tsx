@@ -308,6 +308,7 @@ function AppPage() {
         {tab === "history" ? (
           <HistoryView
             tasks={tasks}
+            userId={userId}
             onRedeliver={handleRedeliver}
             onRestore={restoreTask}
             onPurge={purgeTask}
