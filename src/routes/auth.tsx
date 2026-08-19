@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { AuthPage } from "@/components/AuthPage";
 
+const authSearchSchema = z.object({
+  join: z.string().optional(),
+});
+
 export const Route = createFileRoute("/auth")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    join: typeof search.join === "string" ? search.join : undefined,
-  }),
+  validateSearch: authSearchSchema.parse,
   head: () => ({
     meta: [
       { title: "Sign in to Trackit — Team task delivery" },
